@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: haffadh-party
+    runtime: node
+    buildCommand: npm install --cache /tmp/npm-cache && cd client && npm install --cache /tmp/npm-cache && npx vite build
+    startCommand: node server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
