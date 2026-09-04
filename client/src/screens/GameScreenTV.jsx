@@ -1,6 +1,6 @@
-import React, { useRef, useState, useEffect, Suspense } from 'react';
+import React, { useRef, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, Stars } from '@react-three/drei';
+import { OrbitControls, Stars } from '@react-three/drei';
 import useStore from '../store';
 import IslandBoard from '../components/IslandBoard';
 import { Dice3D } from '../components/Dice3D';
@@ -12,7 +12,6 @@ function CinematicCamera({ gameState }) {
 
   useEffect(() => {
     if (!controlsRef.current) return;
-    // Auto-rotate when idle
     controlsRef.current.autoRotate = gameState?.turnPhase === 'roll';
     controlsRef.current.autoRotateSpeed = 0.3;
   }, [gameState?.turnPhase]);
@@ -22,7 +21,7 @@ function CinematicCamera({ gameState }) {
       ref={controlsRef}
       enablePan={false}
       minDistance={8}
-      maxDistance={45}
+      maxDistance={50}
       minPolarAngle={0.3}
       maxPolarAngle={Math.PI / 2.2}
       autoRotate
@@ -35,39 +34,39 @@ function CinematicCamera({ gameState }) {
 
 function TVOverlay({ gameState }) {
   if (!gameState) return null;
-
   const players = Object.values(gameState.players || {});
   const currentPlayer = gameState.players?.[gameState.currentPlayerId];
   const currentChar = currentPlayer ? getCharacter(currentPlayer.characterId) : null;
 
-  // Sort players by coins for leaderboard
-  const sorted = [...players].sort((a, b) => (b.coins + b.totems.length * 20) - (a.coins + a.totems.length * 20));
+  // Sort by idols desc, then coins
+  const sorted = [...players].sort((a, b) => {
+    const aScore = (a.idols?.length || 0) + (a.bonusIdols?.length || 0);
+    const bScore = (b.idols?.length || 0) + (b.bonusIdols?.length || 0);
+    if (bScore !== aScore) return bScore - aScore;
+    return b.coins - a.coins;
+  });
 
   return (
     <div className="tv-overlay">
       <div className="tv-header">
-        {/* Turn info */}
         <div className="tv-turn-info">
-          {gameState.phase === 'playing' && (
+          {gameState.phase === 'playing' && currentPlayer && (
             <>
               <h2>
-                {currentChar && (
-                  <span style={{ color: currentChar.color }}>
-                    {currentPlayer?.name}'s Turn
-                  </span>
-                )}
+                <span style={{ color: currentChar?.color }}>
+                  {currentPlayer.name}'s Turn
+                </span>
               </h2>
               <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>
-                Turn {gameState.turnNumber} / {gameState.totalTurns}
+                Round {gameState.roundNumber} / {gameState.totalRounds}
               </span>
             </>
           )}
         </div>
 
-        {/* Leaderboard */}
         <div className="tv-leaderboard">
           <h3>Leaderboard</h3>
-          {sorted.map((p, i) => {
+          {sorted.map((p) => {
             const ch = getCharacter(p.characterId);
             return (
               <div key={p.id} className="lb-row">
@@ -75,7 +74,10 @@ function TVOverlay({ gameState }) {
                   <span className="lb-dot" style={{ background: ch?.color }} />
                   {p.name}
                 </span>
-                <span className="lb-coins">{p.coins} coins</span>
+                <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <span style={{ color: '#ffd700', fontWeight: 600 }}>{p.idols?.length || 0} Idols</span>
+                  <span className="lb-coins">{p.coins}c</span>
+                </span>
               </div>
             );
           })}
@@ -94,13 +96,57 @@ function TVOverlay({ gameState }) {
           <p>{gameState.pendingEvent.description}</p>
         </div>
       )}
+
+      {/* Duel banner */}
+      {gameState.pendingDuel && gameState.turnPhase === 'duel' && (
+        <div className="tv-event-banner">
+          <h3>Duel!</h3>
+          <p>
+            {gameState.players[gameState.pendingDuel.challengerId]?.name} vs{' '}
+            {gameState.players[gameState.pendingDuel.opponentId]?.name}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BonusRevealOverlay({ gameState }) {
+  if (gameState?.phase !== 'bonus_reveal') return null;
+  const { send } = useStore();
+  const players = Object.values(gameState.players || {});
+  const achievements = gameState.bonusAchievements || [];
+
+  return (
+    <div className="gameover-overlay" style={{ background: 'rgba(10,10,26,0.92)' }}>
+      <h1 style={{ color: 'var(--accent)', marginBottom: 16 }}>Bonus Idol Awards!</h1>
+      {achievements.map((ach) => {
+        const winner = players.find((p) => p.bonusIdols?.includes(ach.id));
+        const ch = winner ? getCharacter(winner.characterId) : null;
+        return (
+          <div key={ach.id} style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px',
+            background: 'var(--bg-card)', borderRadius: 'var(--radius)', marginBottom: 8,
+            minWidth: 300, border: winner ? `2px solid ${ch?.color || '#fff'}` : '1px solid rgba(255,255,255,0.1)',
+          }}>
+            <span style={{ fontSize: '1.5rem' }}>🏆</span>
+            <div>
+              <div style={{ fontWeight: 600, color: 'var(--accent)' }}>{ach.name}</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{ach.description}</div>
+              {winner && <div style={{ color: ch?.color, fontWeight: 600, fontSize: '0.9rem' }}>{winner.name} +1 Idol</div>}
+            </div>
+          </div>
+        );
+      })}
+      <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => send({ type: 'finish_bonus_reveal' })}>
+        Final Standings
+      </button>
     </div>
   );
 }
 
 function GameOverOverlay({ gameState }) {
   if (gameState?.phase !== 'gameover') return null;
-
   const players = Object.values(gameState.players || {});
   const sorted = [...players].sort((a, b) => b.score - a.score);
   const winner = sorted[0];
@@ -111,6 +157,9 @@ function GameOverOverlay({ gameState }) {
       <h2 style={{ color: getCharacter(winner?.characterId)?.color }}>
         {winner?.name} Wins!
       </h2>
+      <p style={{ color: 'var(--text-dim)' }}>
+        with {winner?.score} Idols ({winner?.idols?.length || 0} purchased + {winner?.bonusIdols?.length || 0} bonus)
+      </p>
       <div className="final-scores">
         {sorted.map((p, i) => {
           const ch = getCharacter(p.characterId);
@@ -120,7 +169,7 @@ function GameOverOverlay({ gameState }) {
                 <span className="lb-dot" style={{ background: ch?.color }} />
                 {p.name}
               </span>
-              <span>{p.score} pts</span>
+              <span>{p.score} Idols ({p.idols?.length || 0}+{p.bonusIdols?.length || 0})</span>
             </div>
           );
         })}
@@ -140,14 +189,13 @@ export default function GameScreenTV() {
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <Canvas
         shadows
-        camera={{ position: [20, 15, 20], fov: 50 }}
+        camera={{ position: [22, 18, 22], fov: 50 }}
         gl={{ antialias: true, toneMapping: 3 }}
       >
         <Suspense fallback={null}>
-          {/* Lighting */}
           <ambientLight intensity={0.3} />
           <directionalLight
-            position={[15, 20, 10]}
+            position={[15, 25, 10]}
             intensity={1.8}
             color="#fff5e0"
             castShadow
@@ -159,15 +207,11 @@ export default function GameScreenTV() {
             shadow-camera-bottom={-25}
           />
           <hemisphereLight args={['#87CEEB', '#2d5016', 0.4]} />
-
-          {/* Sky */}
           <Stars radius={100} depth={50} count={2000} factor={4} />
-          <fog attach="fog" args={['#1a1a3e', 40, 80]} />
+          <fog attach="fog" args={['#1a1a3e', 45, 85]} />
 
-          {/* Island Board */}
           <IslandBoard gameState={gameState} />
 
-          {/* Dice (show during roll) */}
           {gameState?.lastDiceRoll && (
             <Dice3D value={gameState.lastDiceRoll} rolling={gameState.turnPhase === 'moving'} />
           )}
@@ -177,6 +221,7 @@ export default function GameScreenTV() {
       </Canvas>
 
       <TVOverlay gameState={gameState} />
+      <BonusRevealOverlay gameState={gameState} />
       <GameOverOverlay gameState={gameState} />
     </div>
   );

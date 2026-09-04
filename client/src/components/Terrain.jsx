@@ -1,43 +1,49 @@
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
 
-// Procedural noise for terrain
-function simplex2D(x, y) {
-  const s = (x + y) * 0.3660254;
-  const i = Math.floor(x + s);
-  const j = Math.floor(y + s);
-  const t = (i + j) * 0.2113249;
-  return Math.sin(i * 12.9898 + j * 78.233) * 0.5 + 0.5 * Math.cos(x * 3.0 + y * 7.0);
+// Procedural noise
+function noise2D(x, y) {
+  return Math.sin(x * 12.9898 + y * 78.233) * 0.5 + 0.5 * Math.cos(x * 3.0 + y * 7.0);
 }
 
 function terrainHeight(x, z) {
-  // Crescent island shape
-  const angle = Math.atan2(z, x);
   const dist = Math.sqrt(x * x + z * z);
 
-  // Crescent mask: stronger on one side
-  const crescentBias = Math.sin(angle + 0.5) * 0.4 + 0.6;
-  const islandRadius = 18 * crescentBias;
+  // Island base shape — circular with irregular edges
+  const angle = Math.atan2(z, x);
+  const edgeNoise = noise2D(angle * 2, dist * 0.1) * 3;
+  const islandRadius = 20 + edgeNoise;
   const falloff = Math.max(0, 1 - (dist / islandRadius));
-  const islandMask = Math.pow(falloff, 1.5);
+  const islandMask = Math.pow(falloff, 1.2);
 
   if (islandMask < 0.01) return -0.5;
 
-  // Base terrain
-  let h = islandMask * 2.5;
+  // Base terrain with beach
+  let h = islandMask * 1.5;
 
-  // Hills and ridges
-  h += simplex2D(x * 0.15, z * 0.15) * 1.5 * islandMask;
-  h += simplex2D(x * 0.3, z * 0.3) * 0.5 * islandMask;
+  // Rolling hills
+  h += noise2D(x * 0.12, z * 0.12) * 1.0 * islandMask;
+  h += noise2D(x * 0.25, z * 0.25) * 0.4 * islandMask;
 
-  // Central volcano peak
-  const volcDist = Math.sqrt((x - 2) * (x - 2) + (z + 1) * (z + 1));
-  const volcHeight = Math.max(0, 1 - volcDist / 6) * 5;
-  h += volcHeight;
+  // VOLCANO: tall central peak
+  const volcRadius = 8;
+  const volcDist = dist;
+  if (volcDist < volcRadius) {
+    const volcMask = 1 - volcDist / volcRadius;
+    // Steep sides
+    const volcHeight = Math.pow(volcMask, 1.8) * 10;
+    h += volcHeight;
 
-  // Beach: flatten near edges
-  if (islandMask < 0.3) {
-    h *= islandMask / 0.3;
+    // Crater depression at the very top
+    if (volcDist < 1.5) {
+      const craterDepth = (1 - volcDist / 1.5) * 2;
+      h -= craterDepth;
+    }
+  }
+
+  // Beach: flatten near water
+  if (islandMask < 0.15) {
+    h = h * (islandMask / 0.15) * 0.5;
   }
 
   return h;
@@ -45,7 +51,7 @@ function terrainHeight(x, z) {
 
 export function Terrain() {
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(50, 50, 200, 200);
+    const geo = new THREE.PlaneGeometry(55, 55, 220, 220);
     geo.rotateX(-Math.PI / 2);
     const positions = geo.attributes.position.array;
     const colors = new Float32Array(positions.length);
@@ -56,30 +62,32 @@ export function Terrain() {
       const h = terrainHeight(x, z);
       positions[i + 1] = h;
 
-      // Color based on height and region
       let r, g, b;
-      if (h < 0.1) {
-        // Underwater / barely land
-        r = 0.76; g = 0.7; b = 0.5; // sand
-      } else if (h < 0.8) {
+      if (h < 0.05) {
+        // Water edge / wet sand
+        r = 0.7; g = 0.65; b = 0.45;
+      } else if (h < 0.6) {
         // Beach sand
-        r = 0.86; g = 0.8; b = 0.6;
+        r = 0.88; g = 0.82; b = 0.62;
       } else if (h < 2.5) {
         // Jungle green
-        const variation = simplex2D(x * 0.5, z * 0.5) * 0.1;
-        r = 0.15 + variation; g = 0.45 + variation; b = 0.12;
-      } else if (h < 4.5) {
+        const v = noise2D(x * 0.5, z * 0.5) * 0.08;
+        r = 0.12 + v; g = 0.42 + v; b = 0.1;
+      } else if (h < 5.0) {
         // Rocky cliffside
-        r = 0.45; g = 0.4; b = 0.35;
+        const v = noise2D(x * 0.8, z * 0.8) * 0.05;
+        r = 0.42 + v; g = 0.38 + v; b = 0.32;
+      } else if (h < 7.5) {
+        // Dark volcanic rock
+        r = 0.28; g = 0.22; b = 0.2;
       } else {
-        // Volcano dark
-        r = 0.25; g = 0.2; b = 0.18;
-        // Lava glow near peak
-        const volcDist = Math.sqrt((x - 2) * (x - 2) + (z + 1) * (z + 1));
-        if (volcDist < 2) {
-          const glow = (1 - volcDist / 2) * 0.5;
-          r += glow * 0.8;
-          g += glow * 0.2;
+        // Summit / near crater — dark with lava glow
+        const dist = Math.sqrt(x * x + z * z);
+        r = 0.22; g = 0.16; b = 0.14;
+        if (dist < 2) {
+          const glow = (1 - dist / 2) * 0.6;
+          r += glow * 0.9;
+          g += glow * 0.25;
         }
       }
 
@@ -99,7 +107,6 @@ export function Terrain() {
         vertexColors
         roughness={0.85}
         metalness={0.05}
-        flatShading={false}
       />
     </mesh>
   );

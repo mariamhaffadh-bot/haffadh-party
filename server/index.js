@@ -17,7 +17,6 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Room storage
 const rooms = new Map();
 
 function generateRoomCode() {
@@ -45,43 +44,53 @@ function sendTo(ws, message) {
 wss.on('connection', (ws) => {
   let clientId = uuidv4();
   let currentRoom = null;
-  let clientRole = null; // 'tv' or 'phone'
 
   sendTo(ws, { type: 'welcome', clientId });
 
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+    const room = currentRoom ? rooms.get(currentRoom) : null;
 
     switch (msg.type) {
+      // ─── Room Management ───
       case 'create_room': {
         const code = generateRoomCode();
-        const room = new GameRoom(code);
-        room.hostId = clientId;
-        room.clients.set(clientId, { ws, role: 'tv', id: clientId });
-        rooms.set(code, room);
+        const r = new GameRoom(code);
+        r.hostId = clientId;
+        r.clients.set(clientId, { ws, role: 'tv', id: clientId });
+        rooms.set(code, r);
         currentRoom = code;
-        clientRole = 'tv';
-        sendTo(ws, { type: 'room_created', roomCode: code, state: room.getPublicState() });
+        sendTo(ws, { type: 'room_created', roomCode: code, state: r.getPublicState() });
         break;
       }
 
       case 'join_room': {
         const code = (msg.roomCode || '').toUpperCase();
-        const room = rooms.get(code);
-        if (!room) { sendTo(ws, { type: 'error', message: 'Room not found' }); break; }
-        if (room.clients.size >= 9) { sendTo(ws, { type: 'error', message: 'Room is full' }); break; }
-        room.clients.set(clientId, { ws, role: 'phone', id: clientId });
+        const r = rooms.get(code);
+        if (!r) { sendTo(ws, { type: 'error', message: 'Room not found' }); break; }
+        if (r.clients.size >= 9) { sendTo(ws, { type: 'error', message: 'Room is full' }); break; }
+        r.clients.set(clientId, { ws, role: 'phone', id: clientId });
         currentRoom = code;
-        clientRole = 'phone';
-        sendTo(ws, { type: 'room_joined', roomCode: code, clientId, state: room.getPublicState() });
-        broadcastToRoom(code, { type: 'player_connected', clientId, playerCount: room.getPlayerCount() }, ws);
+        sendTo(ws, { type: 'room_joined', roomCode: code, clientId, state: r.getPublicState() });
+        broadcastToRoom(code, { type: 'player_connected', clientId, playerCount: r.getPlayerCount() }, ws);
         break;
       }
 
+      case 'pass_and_play_create': {
+        const code = generateRoomCode();
+        const r = new GameRoom(code);
+        r.hostId = clientId;
+        r.isPassAndPlay = true;
+        r.clients.set(clientId, { ws, role: 'local', id: clientId });
+        rooms.set(code, r);
+        currentRoom = code;
+        sendTo(ws, { type: 'room_created', roomCode: code, passAndPlay: true, state: r.getPublicState() });
+        break;
+      }
+
+      // ─── Lobby ───
       case 'select_character': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
         if (!room) break;
         const result = room.selectCharacter(clientId, msg.characterId, msg.playerName);
         if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
@@ -89,19 +98,25 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case 'pass_and_play_add_player': {
+        if (!room || !room.isPassAndPlay) break;
+        const playerId = uuidv4();
+        const result = room.selectCharacter(playerId, msg.characterId, msg.playerName);
+        if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
+        sendTo(ws, { type: 'state_update', state: room.getPublicState() });
+        break;
+      }
+
       case 'start_game': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
         if (!room || room.hostId !== clientId) break;
-        const result = room.startGame();
+        const result = room.startGame(msg.options);
         if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
         broadcastToRoom(currentRoom, { type: 'game_started', state: room.getPublicState() });
         break;
       }
 
+      // ─── Gameplay ───
       case 'roll_dice': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
         if (!room) break;
         const result = room.rollDice(clientId);
         if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
@@ -110,8 +125,6 @@ wss.on('connection', (ws) => {
       }
 
       case 'choose_path': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
         if (!room) break;
         const result = room.choosePath(clientId, msg.pathIndex);
         if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
@@ -119,73 +132,83 @@ wss.on('connection', (ws) => {
         break;
       }
 
-      case 'buy_landmark': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
+      case 'buy_idol': {
         if (!room) break;
-        const result = room.buyLandmark(clientId);
+        const result = room.buyIdol(clientId);
         if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
-        broadcastToRoom(currentRoom, { type: 'landmark_bought', ...result, state: room.getPublicState() });
+        broadcastToRoom(currentRoom, { type: 'idol_bought', ...result, state: room.getPublicState() });
         break;
       }
 
-      case 'skip_landmark': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
+      case 'skip_idol': {
         if (!room) break;
-        room.skipLandmark(clientId);
+        room.skipIdol(clientId);
         broadcastToRoom(currentRoom, { type: 'state_update', state: room.getPublicState() });
         break;
       }
 
+      case 'buy_item': {
+        if (!room) break;
+        const result = room.buyItem(clientId, msg.itemId);
+        if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
+        broadcastToRoom(currentRoom, { type: 'item_bought', ...result, state: room.getPublicState() });
+        break;
+      }
+
+      case 'leave_shop': {
+        if (!room) break;
+        room.leaveShop(clientId);
+        broadcastToRoom(currentRoom, { type: 'state_update', state: room.getPublicState() });
+        break;
+      }
+
+      case 'use_item': {
+        if (!room) break;
+        const result = room.useItem(clientId, msg.itemId, msg.targetData);
+        if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
+        broadcastToRoom(currentRoom, { type: 'item_used', ...result, state: room.getPublicState() });
+        break;
+      }
+
+      case 'resolve_duel': {
+        if (!room) break;
+        const result = room.resolveDuel(clientId, msg.choice);
+        if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
+        broadcastToRoom(currentRoom, { type: 'duel_resolved', ...result, state: room.getPublicState() });
+        break;
+      }
+
+      case 'end_turn': {
+        if (!room) break;
+        const result = room.endTurn();
+        if (result.roundEnd) {
+          broadcastToRoom(currentRoom, { type: 'round_end_minigame', minigame: result.minigame, state: room.getPublicState() });
+        } else {
+          broadcastToRoom(currentRoom, { type: 'turn_ended', state: room.getPublicState() });
+        }
+        break;
+      }
+
+      // ─── Minigame ───
       case 'minigame_input': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
         if (!room) break;
         room.handleMinigameInput(clientId, msg.input);
         broadcastToRoom(currentRoom, { type: 'minigame_update', state: room.getPublicState() });
         break;
       }
 
-      case 'minigame_result': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
+      case 'resolve_minigame': {
         if (!room) break;
-        const result = room.resolveMinigame(msg.winnerId);
+        const result = room.resolveMinigame();
         broadcastToRoom(currentRoom, { type: 'minigame_resolved', ...result, state: room.getPublicState() });
         break;
       }
 
-      case 'end_turn': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
+      // ─── Bonus Reveal ───
+      case 'finish_bonus_reveal': {
         if (!room) break;
-        room.endTurn();
-        broadcastToRoom(currentRoom, { type: 'turn_ended', state: room.getPublicState() });
-        break;
-      }
-
-      case 'pass_and_play_create': {
-        const code = generateRoomCode();
-        const room = new GameRoom(code);
-        room.hostId = clientId;
-        room.isPassAndPlay = true;
-        room.clients.set(clientId, { ws, role: 'local', id: clientId });
-        rooms.set(code, room);
-        currentRoom = code;
-        clientRole = 'local';
-        sendTo(ws, { type: 'room_created', roomCode: code, passAndPlay: true, state: room.getPublicState() });
-        break;
-      }
-
-      case 'pass_and_play_add_player': {
-        if (!currentRoom) break;
-        const room = rooms.get(currentRoom);
-        if (!room || !room.isPassAndPlay) break;
-        const playerId = uuidv4();
-        const result = room.selectCharacter(playerId, msg.characterId, msg.playerName);
-        if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
-        sendTo(ws, { type: 'state_update', state: room.getPublicState() });
+        room.finishBonusReveal();
+        broadcastToRoom(currentRoom, { type: 'game_over', state: room.getPublicState() });
         break;
       }
     }
@@ -201,9 +224,7 @@ wss.on('connection', (ws) => {
           clientId,
           playerCount: room.getPlayerCount(),
         });
-        if (room.clients.size === 0) {
-          rooms.delete(currentRoom);
-        }
+        if (room.clients.size === 0) rooms.delete(currentRoom);
       }
     }
   });

@@ -8,7 +8,6 @@ export default function useWebSocket() {
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.hostname;
-    // In dev, connect to the server on port 4000; in production, same origin
     const port = import.meta.env.DEV ? '4000' : window.location.port;
     const portPart = port ? `:${port}` : '';
     const url = `${protocol}://${host}${portPart}/ws`;
@@ -18,12 +17,7 @@ export default function useWebSocket() {
     setWs(ws);
 
     ws.onopen = () => setConnected(true);
-    ws.onclose = () => {
-      setConnected(false);
-      setTimeout(() => {
-        // Could implement reconnect here
-      }, 2000);
-    };
+    ws.onclose = () => setConnected(false);
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
@@ -47,26 +41,25 @@ export default function useWebSocket() {
           setScreen('lobby');
           break;
 
-        case 'state_update':
-        case 'player_connected':
-        case 'player_disconnected':
-          if (msg.state) setGameState(msg.state);
-          break;
-
         case 'game_started':
           setGameState(msg.state);
           setScreen('game');
           break;
 
+        case 'state_update':
+        case 'player_connected':
+        case 'player_disconnected':
         case 'dice_rolled':
-          setGameState(msg.state);
-          break;
-
         case 'path_chosen':
-        case 'landmark_bought':
+        case 'idol_bought':
+        case 'item_bought':
+        case 'item_used':
+        case 'duel_resolved':
         case 'turn_ended':
         case 'minigame_update':
         case 'minigame_resolved':
+        case 'round_end_minigame':
+        case 'game_over':
           if (msg.state) setGameState(msg.state);
           break;
 

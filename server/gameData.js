@@ -1,85 +1,136 @@
 // ═══════════════════════════════════════════════════════
-// HAFFADH PARTY — Original Lore & Game Data
-// Island: Nakhlah Isle — a crescent-shaped tropical island
+// HAFFADH PARTY — Original Lore & Game Data (v2)
+// Island: Nakhlah Isle — a volcanic tropical island
+// The board spirals from the beach up the volcano to the summit
 // ═══════════════════════════════════════════════════════
 
 const CHARACTERS = [
-  { id: 'zari',   name: 'Zari',   species: 'Golden Gecko',    color: '#FFD700', accent: '#B8860B', description: 'A nimble gecko who dreams of finding the legendary Golden Coconut.' },
+  { id: 'zari',   name: 'Zari',   species: 'Golden Gecko',       color: '#FFD700', accent: '#B8860B', description: 'A nimble gecko who dreams of reaching the summit first.' },
   { id: 'buhoor', name: 'Buhoor', species: 'Purple Hermit Crab', color: '#9B59B6', accent: '#6C3483', description: 'A wise crab carrying ancient island secrets in its shell.' },
-  { id: 'tamra',  name: 'Tamra',  species: 'Scarlet Parrot',  color: '#E74C3C', accent: '#922B21', description: 'A daring parrot and the island\'s fastest flier.' },
-  { id: 'sidr',   name: 'Sidr',   species: 'Teal Turtle',     color: '#1ABC9C', accent: '#0E6655', description: 'A patient turtle who knows every tide and current.' },
-  { id: 'ghaf',   name: 'Ghaf',   species: 'Brown Monkey',    color: '#8D6E63', accent: '#5D4037', description: 'A mischievous monkey who swings through the canopy.' },
-  { id: 'dallah', name: 'Dallah', species: 'Amber Fox',       color: '#F39C12', accent: '#D68910', description: 'A clever fox with a nose for hidden treasure.' },
-  { id: 'sumra',  name: 'Sumra',  species: 'Pink Jellyfish',  color: '#FF69B4', accent: '#C2185B', description: 'A luminous jellyfish that glows in the moonlight.' },
-  { id: 'mahli',  name: 'Mahli',  species: 'Silver Dolphin',  color: '#95A5A6', accent: '#707B7C', description: 'A playful dolphin who leaps between the waves.' },
+  { id: 'tamra',  name: 'Tamra',  species: 'Scarlet Parrot',     color: '#E74C3C', accent: '#922B21', description: 'A daring parrot and the island\'s fastest flier.' },
+  { id: 'sidr',   name: 'Sidr',   species: 'Teal Turtle',        color: '#1ABC9C', accent: '#0E6655', description: 'A patient turtle who knows every path on the mountain.' },
+  { id: 'ghaf',   name: 'Ghaf',   species: 'Brown Monkey',       color: '#8D6E63', accent: '#5D4037', description: 'A mischievous monkey who swings through the canopy.' },
+  { id: 'dallah', name: 'Dallah', species: 'Amber Fox',          color: '#F39C12', accent: '#D68910', description: 'A clever fox with a nose for hidden treasure.' },
+  { id: 'sumra',  name: 'Sumra',  species: 'Pink Jellyfish',     color: '#FF69B4', accent: '#C2185B', description: 'A luminous jellyfish that floats on warm island breezes.' },
+  { id: 'mahli',  name: 'Mahli',  species: 'Silver Dolphin',     color: '#95A5A6', accent: '#707B7C', description: 'A playful dolphin who leaps between the waves.' },
 ];
 
-// Board: 35 spaces that wind around Nakhlah Isle
-// Path: Beach Start → Tidal Flats → Jungle Trail → Rope Bridge →
-//       Cliffside → Volcano Rim → Caldera Descent → Lagoon → back to start
+// ─── Board: 36 spaces spiraling from beach to volcano summit ───
+// Regions ascend: beach → jungle → cliffside → volcano_rim → summit
 const BOARD_SPACES = [
-  { index: 0,  type: 'start',     name: 'Palm Harbour',         region: 'beach' },
-  { index: 1,  type: 'coin_gain', name: 'Shell Scatter',         region: 'beach', amount: 3 },
-  { index: 2,  type: 'event',     name: 'Tidal Whisper',         region: 'beach' },
-  { index: 3,  type: 'coin_gain', name: 'Crab Stash',            region: 'beach', amount: 2 },
-  { index: 4,  type: 'minigame',  name: 'Coconut Grove Arena',   region: 'beach' },
-  { index: 5,  type: 'coin_loss', name: 'Quicksand Pit',         region: 'tidal' },
-  { index: 6,  type: 'event',     name: 'Monsoon Warning',       region: 'tidal' },
-  { index: 7,  type: 'landmark',  name: 'The Coral Throne',      region: 'tidal' },
-  { index: 8,  type: 'coin_gain', name: 'Starfish Pool',         region: 'tidal', amount: 4 },
-  { index: 9,  type: 'branch',    name: 'Fork of Fronds',        region: 'jungle', branches: [10, 14] },
-  // Left path through jungle
-  { index: 10, type: 'coin_gain', name: 'Banana Cache',          region: 'jungle', amount: 2 },
-  { index: 11, type: 'duel',      name: 'Vine Duel Ring',        region: 'jungle' },
-  { index: 12, type: 'event',     name: 'Firefly Swarm',         region: 'jungle' },
-  { index: 13, type: 'coin_loss', name: 'Pitcher Plant Trap',    region: 'jungle', amount: 3 },
-  // Right path (shortcut but risky)
-  { index: 14, type: 'coin_loss', name: 'Thorny Pass',           region: 'jungle', amount: 4 },
-  { index: 15, type: 'coin_gain', name: 'Hidden Grotto',         region: 'jungle', amount: 6 },
-  // Paths merge
-  { index: 16, type: 'landmark',  name: 'The Firebloom Shrine',  region: 'jungle' },
-  { index: 17, type: 'minigame',  name: 'Canopy Challenge',      region: 'jungle' },
-  { index: 18, type: 'coin_gain', name: 'Honeycomb Hollow',      region: 'cliffside', amount: 3 },
-  { index: 19, type: 'event',     name: 'Rockslide!',            region: 'cliffside' },
-  { index: 20, type: 'coin_loss', name: 'Eagle Toll',            region: 'cliffside', amount: 2 },
-  { index: 21, type: 'duel',      name: 'Rope Bridge Standoff',  region: 'cliffside' },
-  { index: 22, type: 'landmark',  name: 'The Driftwood Market',  region: 'cliffside' },
-  { index: 23, type: 'coin_gain', name: 'Gem Vein',              region: 'volcano', amount: 5 },
-  { index: 24, type: 'event',     name: 'Lava Burst',            region: 'volcano' },
-  { index: 25, type: 'minigame',  name: 'Caldera Clash',         region: 'volcano' },
-  { index: 26, type: 'coin_loss', name: 'Sulfur Cloud',          region: 'volcano', amount: 3 },
-  { index: 27, type: 'landmark',  name: 'The Canopy Altar',      region: 'volcano' },
-  { index: 28, type: 'coin_gain', name: 'Obsidian Shards',       region: 'volcano', amount: 4 },
-  { index: 29, type: 'branch',    name: 'Lava Fork',             region: 'volcano', branches: [30, 32] },
-  { index: 30, type: 'coin_gain', name: 'Crystal Cave',          region: 'lagoon', amount: 6 },
-  { index: 31, type: 'event',     name: 'Whirlpool Pull',        region: 'lagoon' },
-  { index: 32, type: 'coin_loss', name: 'Coral Maze',            region: 'lagoon', amount: 2 },
-  { index: 33, type: 'landmark',  name: 'The Obsidian Arch',     region: 'lagoon' },
-  { index: 34, type: 'minigame',  name: 'Lagoon Showdown',       region: 'lagoon' },
+  // ── Beach (0-6) ──
+  { index: 0,  type: 'start',     name: 'Palm Harbour',          region: 'beach',    elevation: 0 },
+  { index: 1,  type: 'coin_gain', name: 'Shell Scatter',         region: 'beach',    elevation: 0.1, amount: 3 },
+  { index: 2,  type: 'event',     name: 'Tidal Whisper',         region: 'beach',    elevation: 0.15 },
+  { index: 3,  type: 'item_shop', name: 'Driftwood Bazaar',      region: 'beach',    elevation: 0.2 },
+  { index: 4,  type: 'coin_gain', name: 'Crab Stash',            region: 'beach',    elevation: 0.3, amount: 2 },
+  { index: 5,  type: 'idol_shrine', name: 'Tidepool Shrine',     region: 'beach',    elevation: 0.35, baseCost: 10 },
+  { index: 6,  type: 'coin_loss', name: 'Quicksand Pit',         region: 'beach',    elevation: 0.4, amount: 2 },
+
+  // ── Jungle (7-14) ──
+  { index: 7,  type: 'event',     name: 'Monsoon Warning',       region: 'jungle',   elevation: 0.5 },
+  { index: 8,  type: 'coin_gain', name: 'Banana Cache',          region: 'jungle',   elevation: 0.6, amount: 3 },
+  { index: 9,  type: 'branch',    name: 'Fork of Fronds',        region: 'jungle',   elevation: 0.65, branches: [10, 13] },
+  // Left fork (longer, safer)
+  { index: 10, type: 'coin_gain', name: 'Honeycomb Hollow',      region: 'jungle',   elevation: 0.7, amount: 4 },
+  { index: 11, type: 'item_shop', name: 'Canopy Market',         region: 'jungle',   elevation: 0.75 },
+  { index: 12, type: 'event',     name: 'Firefly Swarm',         region: 'jungle',   elevation: 0.8 },
+  // Right fork (shorter, risky)
+  { index: 13, type: 'coin_loss', name: 'Pitcher Plant Trap',    region: 'jungle',   elevation: 0.75, amount: 4 },
+  // Merge
+  { index: 14, type: 'idol_shrine', name: 'Firebloom Shrine',    region: 'jungle',   elevation: 0.85, baseCost: 15 },
+
+  // ── Cliffside (15-22) ──
+  { index: 15, type: 'coin_gain', name: 'Gem Vein',              region: 'cliffside', elevation: 1.0, amount: 4 },
+  { index: 16, type: 'duel',      name: 'Rope Bridge Standoff',  region: 'cliffside', elevation: 1.1 },
+  { index: 17, type: 'event',     name: 'Rockslide!',            region: 'cliffside', elevation: 1.2 },
+  { index: 18, type: 'coin_loss', name: 'Eagle Toll',            region: 'cliffside', elevation: 1.3, amount: 3 },
+  { index: 19, type: 'item_shop', name: 'Cliff Outpost',         region: 'cliffside', elevation: 1.4 },
+  { index: 20, type: 'idol_shrine', name: 'Stormwatch Shrine',   region: 'cliffside', elevation: 1.5, baseCost: 20 },
+  { index: 21, type: 'coin_gain', name: 'Crystal Cave',          region: 'cliffside', elevation: 1.6, amount: 5 },
+  { index: 22, type: 'duel',      name: 'Switchback Clash',      region: 'cliffside', elevation: 1.7 },
+
+  // ── Volcano Rim (23-30) ──
+  { index: 23, type: 'event',     name: 'Lava Burst',            region: 'volcano_rim', elevation: 1.9 },
+  { index: 24, type: 'coin_gain', name: 'Obsidian Shards',       region: 'volcano_rim', elevation: 2.0, amount: 5 },
+  { index: 25, type: 'coin_loss', name: 'Sulfur Cloud',          region: 'volcano_rim', elevation: 2.1, amount: 4 },
+  { index: 26, type: 'item_shop', name: 'Ember Forge',           region: 'volcano_rim', elevation: 2.2 },
+  { index: 27, type: 'branch',    name: 'Lava Fork',             region: 'volcano_rim', elevation: 2.3, branches: [28, 30] },
+  // Left (scenic route)
+  { index: 28, type: 'coin_gain', name: 'Magma Geode',           region: 'volcano_rim', elevation: 2.4, amount: 6 },
+  { index: 29, type: 'event',     name: 'Eruption Tremor',       region: 'volcano_rim', elevation: 2.5 },
+  // Right (express but costly)
+  { index: 30, type: 'coin_loss', name: 'Ash Storm',             region: 'volcano_rim', elevation: 2.5, amount: 5 },
+  // Merge
+  { index: 31, type: 'idol_shrine', name: 'Caldera Shrine',      region: 'volcano_rim', elevation: 2.7, baseCost: 25 },
+  { index: 32, type: 'duel',      name: 'Rim Duel Ring',         region: 'volcano_rim', elevation: 2.8 },
+
+  // ── Summit (33-35) ──
+  { index: 33, type: 'coin_gain', name: 'Starfall Ledge',        region: 'summit', elevation: 3.0, amount: 7 },
+  { index: 34, type: 'event',     name: 'Peak Winds',            region: 'summit', elevation: 3.2 },
+  { index: 35, type: 'idol_shrine', name: 'The Sunfire Crown',   region: 'summit', elevation: 3.5, baseCost: 35 },
 ];
 
-const LANDMARKS = [
-  { id: 'coral_throne',     name: 'The Coral Throne',     spaceIndex: 7,  cost: 15, ownerId: null, description: 'A throne carved from living coral, pulsing with ocean energy.' },
-  { id: 'firebloom_shrine', name: 'The Firebloom Shrine',  spaceIndex: 16, cost: 20, ownerId: null, description: 'A shrine where rare fire-blooming flowers glow at dusk.' },
-  { id: 'driftwood_market', name: 'The Driftwood Market',  spaceIndex: 22, cost: 18, ownerId: null, description: 'A floating market built on ancient driftwood rafts.' },
-  { id: 'canopy_altar',     name: 'The Canopy Altar',      spaceIndex: 27, cost: 25, ownerId: null, description: 'A sacred platform high in the jungle canopy.' },
-  { id: 'obsidian_arch',    name: 'The Obsidian Arch',     spaceIndex: 33, cost: 22, ownerId: null, description: 'A natural arch of volcanic glass that frames the sunset.' },
+// Idol shrines with escalating costs
+const IDOL_SHRINES = [
+  { id: 'tidepool_idol',   name: 'Tidepool Idol',   spaceIndex: 5,  baseCost: 10, description: 'A coral idol humming with ocean tides.' },
+  { id: 'firebloom_idol',  name: 'Firebloom Idol',  spaceIndex: 14, baseCost: 15, description: 'An idol wreathed in ever-burning petals.' },
+  { id: 'stormwatch_idol', name: 'Stormwatch Idol',  spaceIndex: 20, baseCost: 20, description: 'An idol crackling with captured lightning.' },
+  { id: 'caldera_idol',    name: 'Caldera Idol',     spaceIndex: 31, baseCost: 25, description: 'An idol forged in the volcano\'s heart.' },
+  { id: 'sunfire_crown',   name: 'The Sunfire Crown', spaceIndex: 35, baseCost: 35, description: 'The rarest idol — the molten crown atop the summit. Legend says it holds the island\'s soul.' },
 ];
 
+// ─── Items ───
+const ITEMS = [
+  {
+    id: 'tailwind_charm',
+    name: 'Tailwind Charm',
+    cost: 5,
+    description: 'Grants a bonus +3 to your next dice roll.',
+    effect: 'bonus_roll',
+    value: 3,
+  },
+  {
+    id: 'thornvine_trap',
+    name: 'Thornvine Trap',
+    cost: 6,
+    description: 'Drop on any space — the next player who lands there loses 4 coins.',
+    effect: 'hazard',
+    value: 4,
+  },
+  {
+    id: 'phantom_hand',
+    name: 'Phantom Hand',
+    cost: 10,
+    description: 'Use at an Idol Shrine to steal one Idol from an opponent instead of buying.',
+    effect: 'steal_idol',
+    value: 1,
+  },
+  {
+    id: 'coral_shield',
+    name: 'Coral Shield',
+    cost: 4,
+    description: 'Blocks one incoming steal, hazard, or coin-loss event. Auto-triggers.',
+    effect: 'shield',
+    value: 1,
+  },
+];
+
+// ─── Random Events ───
 const RANDOM_EVENTS = [
-  { id: 'trade_winds',    name: 'Trade Winds Blow!',       description: 'Favorable winds fill your sails.', effect: 'gain_coins', value: 4 },
-  { id: 'monsoon',        name: 'Monsoon Season!',          description: 'Heavy rains wash away some coins.', effect: 'lose_coins', value: 3 },
-  { id: 'treasure_map',   name: 'Treasure Map Found!',      description: 'An old map leads to buried coins.', effect: 'gain_coins', value: 6 },
-  { id: 'coin_swap',      name: 'Island Spirit Swap!',      description: 'The island spirits swap your fortune with another player.', effect: 'swap_coins', value: 0 },
-  { id: 'current_push',   name: 'Strong Current!',          description: 'A current pushes you forward.', effect: 'move_forward', value: 2 },
-  { id: 'undertow',       name: 'Undertow!',                description: 'You get pulled back by the undertow.', effect: 'move_backward', value: 3 },
-  { id: 'coconut_rain',   name: 'Coconut Rain!',            description: 'Coconuts fall from the trees! Collect them.', effect: 'gain_coins', value: 3 },
-  { id: 'hermit_tax',     name: 'Hermit Crab Tax',          description: 'The local crabs demand a toll.', effect: 'lose_coins', value: 2 },
-  { id: 'dolphins_gift',  name: 'Dolphin\'s Gift',          description: 'A friendly dolphin brings you shells.', effect: 'gain_coins', value: 5 },
-  { id: 'volcano_rumble', name: 'Volcano Rumble!',           description: 'The ground shakes — watch your step!', effect: 'lose_coins', value: 4 },
+  { id: 'trade_winds',    name: 'Trade Winds Blow!',      description: 'Favorable winds fill your sails.', effect: 'gain_coins', value: 4 },
+  { id: 'monsoon',        name: 'Monsoon Season!',         description: 'Heavy rains wash away some coins.', effect: 'lose_coins', value: 3 },
+  { id: 'treasure_map',   name: 'Treasure Map Found!',     description: 'An old map leads to buried coins.', effect: 'gain_coins', value: 6 },
+  { id: 'coin_swap',      name: 'Island Spirit Swap!',     description: 'The island spirits swap your fortune with another player.', effect: 'swap_coins', value: 0 },
+  { id: 'current_push',   name: 'Strong Current!',         description: 'A current pushes you forward.', effect: 'move_forward', value: 2 },
+  { id: 'undertow',       name: 'Undertow!',               description: 'You get pulled back by the undertow.', effect: 'move_backward', value: 3 },
+  { id: 'coconut_rain',   name: 'Coconut Rain!',           description: 'Coconuts fall from the trees — collect them!', effect: 'gain_coins', value: 3 },
+  { id: 'hermit_tax',     name: 'Hermit Crab Tax',         description: 'The local crabs demand a toll.', effect: 'lose_coins', value: 2 },
+  { id: 'dolphins_gift',  name: 'Dolphin\'s Gift',         description: 'A friendly dolphin brings you shells.', effect: 'gain_coins', value: 5 },
+  { id: 'volcano_rumble', name: 'Volcano Rumble!',         description: 'The ground shakes — watch your step!', effect: 'lose_coins', value: 4 },
 ];
 
-// Minigame templates
+// ─── Minigame Templates ───
 const MINIGAME_TEMPLATES = [
   {
     id: 'tap_race',
@@ -89,7 +140,6 @@ const MINIGAME_TEMPLATES = [
     minPlayers: 2,
     maxPlayers: 8,
     duration: 10000,
-    winCondition: 'most_taps',
   },
   {
     id: 'balance',
@@ -99,7 +149,6 @@ const MINIGAME_TEMPLATES = [
     minPlayers: 2,
     maxPlayers: 8,
     duration: 15000,
-    winCondition: 'last_standing',
   },
   {
     id: 'memory',
@@ -109,7 +158,6 @@ const MINIGAME_TEMPLATES = [
     minPlayers: 1,
     maxPlayers: 8,
     duration: 30000,
-    winCondition: 'most_pairs',
   },
   {
     id: 'tug_of_war',
@@ -117,9 +165,8 @@ const MINIGAME_TEMPLATES = [
     description: 'Mash the button to pull the vine to your side!',
     type: 'tug_of_war',
     minPlayers: 2,
-    maxPlayers: 2,
+    maxPlayers: 8,
     duration: 8000,
-    winCondition: 'most_mashes',
   },
   {
     id: 'reaction',
@@ -129,8 +176,28 @@ const MINIGAME_TEMPLATES = [
     minPlayers: 2,
     maxPlayers: 8,
     duration: 5000,
-    winCondition: 'fastest_reaction',
   },
 ];
 
-module.exports = { CHARACTERS, BOARD_SPACES, LANDMARKS, RANDOM_EVENTS, MINIGAME_TEMPLATES };
+// ─── Bonus Idol Achievements (revealed at end of game) ───
+const BONUS_ACHIEVEMENTS = [
+  { id: 'minigame_master', name: 'Minigame Master',    description: 'Won the most minigames.',     stat: 'minigamesWon' },
+  { id: 'coin_hoarder',    name: 'Coin Hoarder',       description: 'Held the most coins at end.', stat: 'coins' },
+  { id: 'trailblazer',     name: 'Trailblazer',        description: 'Traveled the most spaces.',   stat: 'spacesTraveled' },
+  { id: 'duel_champion',   name: 'Duel Champion',      description: 'Won the most duels.',         stat: 'duelsWon' },
+];
+
+// ─── Minigame ranked payout table ───
+// payouts[placement] = coins awarded (0-indexed: 0=1st, 1=2nd, etc.)
+const MINIGAME_PAYOUTS = [10, 6, 3, 1];
+
+module.exports = {
+  CHARACTERS,
+  BOARD_SPACES,
+  IDOL_SHRINES,
+  ITEMS,
+  RANDOM_EVENTS,
+  MINIGAME_TEMPLATES,
+  BONUS_ACHIEVEMENTS,
+  MINIGAME_PAYOUTS,
+};

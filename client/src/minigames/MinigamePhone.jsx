@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 // ═══════════════════════════════════════════════════════
-// MINIGAME PHONE CONTROLLERS
-// Each minigame is a self-contained plugin:
-// { id, name, controllerComponent, resolveWinner(state) }
+// MINIGAME PHONE CONTROLLERS — Plugin system
+// Each: { controllerComponent, resolveRanking }
+// Controllers send scored input to server for ranked payouts
 // ═══════════════════════════════════════════════════════
 
 function TapRaceController({ send, clientId }) {
@@ -14,12 +14,7 @@ function TapRaceController({ send, clientId }) {
   useEffect(() => {
     const interval = setInterval(() => {
       setTimeLeft((t) => {
-        if (t <= 1) {
-          setActive(false);
-          clearInterval(interval);
-          send({ type: 'minigame_input', input: { type: 'tap_race', taps, final: true } });
-          return 0;
-        }
+        if (t <= 1) { setActive(false); clearInterval(interval); return 0; }
         return t - 1;
       });
     }, 1000);
@@ -27,15 +22,10 @@ function TapRaceController({ send, clientId }) {
   }, []);
 
   useEffect(() => {
-    if (active) {
-      send({ type: 'minigame_input', input: { type: 'tap_race', taps } });
-    }
+    send({ type: 'minigame_input', input: { score: taps } });
   }, [taps]);
 
-  const handleTap = () => {
-    if (!active) return;
-    setTaps((t) => t + 1);
-  };
+  const handleTap = () => { if (active) setTaps((t) => t + 1); };
 
   return (
     <div className="minigame-phone">
@@ -53,6 +43,7 @@ function BalanceController({ send, clientId }) {
   const [position, setPosition] = useState({ x: 50, y: 50 });
   const [alive, setAlive] = useState(true);
   const [timeLeft, setTimeLeft] = useState(15);
+  const [survivalTime, setSurvivalTime] = useState(0);
   const driftRef = useRef({ dx: (Math.random() - 0.5) * 2, dy: (Math.random() - 0.5) * 2 });
 
   useEffect(() => {
@@ -61,30 +52,30 @@ function BalanceController({ send, clientId }) {
       setTimeLeft((t) => {
         if (t <= 1) {
           clearInterval(interval);
-          send({ type: 'minigame_input', input: { type: 'balance', survived: true, final: true } });
+          send({ type: 'minigame_input', input: { score: 150 } }); // survived = max score
           return 0;
         }
         return t - 1;
+      });
+      setSurvivalTime((s) => {
+        const newS = s + 1;
+        send({ type: 'minigame_input', input: { score: newS * 10 } });
+        return newS;
       });
 
       setPosition((p) => {
         const drift = driftRef.current;
         let nx = p.x + drift.dx;
         let ny = p.y + drift.dy;
-
-        // Increase drift over time
         drift.dx += (Math.random() - 0.5) * 0.3;
         drift.dy += (Math.random() - 0.5) * 0.3;
         drift.dx = Math.max(-4, Math.min(4, drift.dx));
         drift.dy = Math.max(-4, Math.min(4, drift.dy));
-
-        // Check if out of bounds
         const dist = Math.sqrt((nx - 50) ** 2 + (ny - 50) ** 2);
         if (dist > 45) {
           setAlive(false);
-          send({ type: 'minigame_input', input: { type: 'balance', survived: false, final: true } });
+          send({ type: 'minigame_input', input: { score: survivalTime * 10 } });
         }
-
         return { x: nx, y: ny };
       });
     }, 100);
@@ -97,8 +88,6 @@ function BalanceController({ send, clientId }) {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((touch.clientX - rect.left) / rect.width) * 100;
     const y = ((touch.clientY - rect.top) / rect.height) * 100;
-
-    // Push position toward touch
     setPosition((p) => ({
       x: p.x + (50 - (x - 50) * 0.1 - p.x) * 0.3,
       y: p.y + (50 - (y - 50) * 0.1 - p.y) * 0.3,
@@ -110,18 +99,11 @@ function BalanceController({ send, clientId }) {
     <div className="minigame-phone">
       <h2 style={{ color: 'var(--accent)' }}>Tightrope Tilt!</h2>
       <p className="timer-display">{timeLeft}s</p>
-      <div
-        className="balance-zone"
-        onTouchMove={handleTilt}
-        onMouseMove={handleTilt}
-      >
-        <div
-          className="balance-dot"
-          style={{
-            transform: `translate(${position.x - 50}px, ${position.y - 50}px)`,
-            background: alive ? 'var(--accent)' : 'var(--danger)',
-          }}
-        />
+      <div className="balance-zone" onTouchMove={handleTilt} onMouseMove={handleTilt}>
+        <div className="balance-dot" style={{
+          transform: `translate(${position.x - 50}px, ${position.y - 50}px)`,
+          background: alive ? 'var(--accent)' : 'var(--danger)',
+        }} />
       </div>
       {!alive && <p style={{ color: 'var(--danger)' }}>You fell off!</p>}
     </div>
@@ -147,25 +129,16 @@ function MemoryController({ send, clientId }) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(interval);
-          send({ type: 'minigame_input', input: { type: 'memory', pairs, final: true } });
-          return 0;
-        }
-        return t - 1;
-      });
+      setTimeLeft((t) => { if (t <= 1) { clearInterval(interval); return 0; } return t - 1; });
     }, 1000);
     return () => clearInterval(interval);
   }, []);
 
   const handleFlip = (index) => {
     if (board[index].flipped || board[index].matched || flipped.length >= 2) return;
-
     const newBoard = [...board];
     newBoard[index] = { ...newBoard[index], flipped: true };
     setBoard(newBoard);
-
     const newFlipped = [...flipped, index];
     setFlipped(newFlipped);
 
@@ -178,9 +151,9 @@ function MemoryController({ send, clientId }) {
           updated[b] = { ...updated[b], matched: true };
           setBoard(updated);
           setPairs((p) => {
-            const newPairs = p + 1;
-            send({ type: 'minigame_input', input: { type: 'memory', pairs: newPairs } });
-            return newPairs;
+            const np = p + 1;
+            send({ type: 'minigame_input', input: { score: np * 10 } });
+            return np;
           });
           setFlipped([]);
         }, 300);
@@ -222,24 +195,19 @@ function TugOfWarController({ send, clientId }) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(interval);
-          send({ type: 'minigame_input', input: { type: 'tug_of_war', mashes, final: true } });
-          return 0;
-        }
-        return t - 1;
-      });
-      // Power decays
+      setTimeLeft((t) => { if (t <= 1) { clearInterval(interval); return 0; } return t - 1; });
       setPower((p) => Math.max(0, p - 2));
     }, 1000);
     return () => clearInterval(interval);
   }, []);
 
   const handleMash = () => {
-    setMashes((m) => m + 1);
+    setMashes((m) => {
+      const nm = m + 1;
+      send({ type: 'minigame_input', input: { score: nm } });
+      return nm;
+    });
     setPower((p) => Math.min(100, p + 5));
-    send({ type: 'minigame_input', input: { type: 'tug_of_war', mashes: mashes + 1 } });
   };
 
   return (
@@ -263,20 +231,17 @@ function TugOfWarController({ send, clientId }) {
 }
 
 function ReactionController({ send, clientId }) {
-  const [phase, setPhase] = useState('waiting'); // waiting, ready, go, done
+  const [phase, setPhase] = useState('waiting');
   const [reactionTime, setReactionTime] = useState(null);
   const goTimeRef = useRef(null);
 
   useEffect(() => {
-    // Random delay before showing "TAP!"
     const delay = 2000 + Math.random() * 3000;
     const timer = setTimeout(() => {
       setPhase('go');
       goTimeRef.current = performance.now();
     }, delay);
-
     setTimeout(() => setPhase('ready'), 500);
-
     return () => clearTimeout(timer);
   }, []);
 
@@ -285,12 +250,11 @@ function ReactionController({ send, clientId }) {
       const rt = performance.now() - goTimeRef.current;
       setReactionTime(rt);
       setPhase('done');
-      send({ type: 'minigame_input', input: { type: 'reaction', reactionTime: rt, final: true } });
+      send({ type: 'minigame_input', input: { reactionTime: rt, score: Math.max(0, 10000 - rt) } });
     } else if (phase === 'ready') {
-      // Too early!
       setPhase('done');
       setReactionTime(9999);
-      send({ type: 'minigame_input', input: { type: 'reaction', reactionTime: 9999, final: true } });
+      send({ type: 'minigame_input', input: { reactionTime: 9999, score: 0 } });
     }
   };
 
@@ -314,7 +278,6 @@ function ReactionController({ send, clientId }) {
   );
 }
 
-// Minigame registry
 const MINIGAME_CONTROLLERS = {
   tap_race: TapRaceController,
   balance: BalanceController,
@@ -324,22 +287,15 @@ const MINIGAME_CONTROLLERS = {
 };
 
 export default function MinigamePhone({ gameState, clientId, send }) {
-  // Pick a random minigame type for now
-  const [gameType] = useState(() => {
+  const mgType = gameState?.activeMinigame?.type;
+  const [selectedType] = useState(() => {
+    if (mgType && MINIGAME_CONTROLLERS[mgType]) return mgType;
     const types = Object.keys(MINIGAME_CONTROLLERS);
     return types[Math.floor(Math.random() * types.length)];
   });
 
-  const Controller = MINIGAME_CONTROLLERS[gameType];
-
-  if (!Controller) {
-    return (
-      <div className="minigame-phone">
-        <p>Unknown minigame type</p>
-      </div>
-    );
-  }
-
+  const Controller = MINIGAME_CONTROLLERS[selectedType];
+  if (!Controller) return <div className="minigame-phone"><p>Unknown minigame</p></div>;
   return <Controller send={send} clientId={clientId} gameState={gameState} />;
 }
 

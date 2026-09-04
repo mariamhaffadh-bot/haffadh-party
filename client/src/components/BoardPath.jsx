@@ -2,52 +2,50 @@ import React, { useMemo } from 'react';
 import * as THREE from 'three';
 import { terrainHeight } from './Terrain';
 
-// Space type colors and geometry
+// ─── Space type visual styles ───
 const SPACE_STYLES = {
-  start:     { color: '#ffffff', emissive: '#444444', shape: 'star' },
-  coin_gain: { color: '#f7b731', emissive: '#8B6914', shape: 'cylinder' },
-  coin_loss: { color: '#e74c3c', emissive: '#922B21', shape: 'cylinder' },
-  event:     { color: '#9b59b6', emissive: '#6C3483', shape: 'octahedron' },
-  landmark:  { color: '#ffd700', emissive: '#B8860B', shape: 'totem' },
-  duel:      { color: '#e67e22', emissive: '#D35400', shape: 'box' },
-  minigame:  { color: '#3498db', emissive: '#1A5276', shape: 'sphere' },
-  branch:    { color: '#2ecc71', emissive: '#196F3D', shape: 'diamond' },
+  start:       { color: '#ffffff', emissive: '#444444', shape: 'star' },
+  coin_gain:   { color: '#f7b731', emissive: '#8B6914', shape: 'cylinder' },
+  coin_loss:   { color: '#e74c3c', emissive: '#922B21', shape: 'cylinder' },
+  event:       { color: '#9b59b6', emissive: '#6C3483', shape: 'octahedron' },
+  idol_shrine: { color: '#ffd700', emissive: '#ff8c00', shape: 'totem' },
+  item_shop:   { color: '#2ecc71', emissive: '#196F3D', shape: 'box' },
+  duel:        { color: '#e67e22', emissive: '#D35400', shape: 'pyramid' },
+  branch:      { color: '#3498db', emissive: '#1A5276', shape: 'diamond' },
 };
 
-// Define the path the spaces follow around the island
-// This creates a winding path: beach → tidal → jungle → cliffside → volcano → lagoon
+// ─── Spiral path from beach up the volcano to the summit ───
+// Starts at outer radius (beach), spirals inward and upward to the peak
 function getSpacePositions(count) {
   const positions = [];
-
   for (let i = 0; i < count; i++) {
-    const t = i / count;
-    const angle = t * Math.PI * 2 - Math.PI * 0.3;
-    // Vary radius to create interesting path
-    let radius;
-    if (t < 0.15) radius = 14; // Beach
-    else if (t < 0.28) radius = 12; // Tidal
-    else if (t < 0.45) radius = 8 + Math.sin(t * 10) * 2; // Jungle (wavy)
-    else if (t < 0.6) radius = 6; // Cliffside
-    else if (t < 0.75) radius = 4 + t * 3; // Volcano area
-    else radius = 10 + (1 - t) * 6; // Lagoon back to beach
+    const t = i / (count - 1); // 0..1
+
+    // Spiral: starts far out, comes inward toward the volcano center
+    // 2.5 full rotations around the volcano
+    const angle = t * Math.PI * 5 - Math.PI * 0.6;
+    const radius = 16 - t * 14; // 16 (beach) → 2 (summit)
 
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
-    const y = terrainHeight(x, z) + 0.4;
 
-    positions.push([x, Math.max(y, 0.3), z]);
+    // Height follows terrain but with a path-specific uplift
+    const baseHeight = terrainHeight(x, z);
+    const pathHeight = Math.max(baseHeight + 0.3, t * 8.5 + 0.3);
+
+    positions.push([x, pathHeight, z]);
   }
-
   return positions;
 }
 
 function SpaceMarker({ position, type, index, name }) {
   const style = SPACE_STYLES[type] || SPACE_STYLES.start;
+  const isShrine = type === 'idol_shrine';
 
   let geometry;
   switch (style.shape) {
     case 'star':
-      geometry = <cylinderGeometry args={[0.4, 0.4, 0.15, 6]} />;
+      geometry = <cylinderGeometry args={[0.45, 0.45, 0.15, 6]} />;
       break;
     case 'cylinder':
       geometry = <cylinderGeometry args={[0.3, 0.3, 0.2, 12]} />;
@@ -56,13 +54,13 @@ function SpaceMarker({ position, type, index, name }) {
       geometry = <octahedronGeometry args={[0.3, 0]} />;
       break;
     case 'totem':
-      geometry = <cylinderGeometry args={[0.2, 0.35, 0.5, 6]} />;
+      geometry = <cylinderGeometry args={[0.15, 0.35, 0.7, 6]} />;
       break;
     case 'box':
-      geometry = <boxGeometry args={[0.35, 0.2, 0.35]} />;
+      geometry = <boxGeometry args={[0.35, 0.25, 0.35]} />;
       break;
-    case 'sphere':
-      geometry = <sphereGeometry args={[0.3, 12, 12]} />;
+    case 'pyramid':
+      geometry = <coneGeometry args={[0.3, 0.4, 4]} />;
       break;
     case 'diamond':
       geometry = <octahedronGeometry args={[0.3, 0]} />;
@@ -73,38 +71,47 @@ function SpaceMarker({ position, type, index, name }) {
 
   return (
     <group position={position}>
-      {/* Base platform */}
+      {/* Base disc */}
       <mesh position={[0, -0.05, 0]} receiveShadow>
-        <cylinderGeometry args={[0.45, 0.5, 0.1, 16]} />
-        <meshStandardMaterial color="#333" roughness={0.8} metalness={0.2} />
+        <cylinderGeometry args={[0.5, 0.55, 0.1, 16]} />
+        <meshStandardMaterial color="#2a2a2a" roughness={0.8} metalness={0.2} />
       </mesh>
-      {/* Space marker */}
-      <mesh position={[0, 0.15, 0]} castShadow>
+      {/* Marker */}
+      <mesh position={[0, isShrine ? 0.25 : 0.15, 0]} castShadow>
         {geometry}
         <meshStandardMaterial
           color={style.color}
           emissive={style.emissive}
-          emissiveIntensity={0.3}
+          emissiveIntensity={isShrine ? 0.6 : 0.3}
           roughness={0.4}
-          metalness={0.3}
+          metalness={isShrine ? 0.5 : 0.3}
         />
       </mesh>
+      {/* Shrine glow */}
+      {isShrine && (
+        <pointLight
+          position={[0, 0.6, 0]}
+          color="#ffd700"
+          intensity={1.5}
+          distance={3}
+          decay={2}
+        />
+      )}
     </group>
   );
 }
 
-// Path line connecting spaces
 function PathLine({ positions }) {
   const points = useMemo(() => {
-    return positions.map((p) => new THREE.Vector3(p[0], p[1] - 0.1, p[2]));
+    return positions.map((p) => new THREE.Vector3(p[0], p[1] - 0.08, p[2]));
   }, [positions]);
 
   const curve = useMemo(() => {
-    return new THREE.CatmullRomCurve3(points, true);
+    return new THREE.CatmullRomCurve3(points, false);
   }, [points]);
 
   const tubeGeo = useMemo(() => {
-    return new THREE.TubeGeometry(curve, 200, 0.08, 8, true);
+    return new THREE.TubeGeometry(curve, 300, 0.06, 8, false);
   }, [curve]);
 
   return (
@@ -116,7 +123,10 @@ function PathLine({ positions }) {
 
 export function BoardPath({ spaces }) {
   const spaceList = spaces || [];
-  const positions = useMemo(() => getSpacePositions(spaceList.length || 35), [spaceList.length]);
+  const positions = useMemo(
+    () => getSpacePositions(spaceList.length || 36),
+    [spaceList.length]
+  );
 
   return (
     <group>
