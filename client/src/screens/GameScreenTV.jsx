@@ -74,9 +74,10 @@ function TVOverlay({ gameState }) {
                   <span className="lb-dot" style={{ background: ch?.color }} />
                   {p.name}
                 </span>
-                <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <span style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: '0.75rem' }}>
                   <span style={{ color: '#ffd700', fontWeight: 600 }}>{p.idols?.length || 0} Idols</span>
                   <span className="lb-coins">{p.coins}c</span>
+                  <span style={{ color: '#88bbff' }}>{p.minigamesWon || 0}W</span>
                 </span>
               </div>
             );
@@ -105,6 +106,28 @@ function TVOverlay({ gameState }) {
             {gameState.players[gameState.pendingDuel.challengerId]?.name} vs{' '}
             {gameState.players[gameState.pendingDuel.opponentId]?.name}
           </p>
+        </div>
+      )}
+
+      {/* Board hazard event cinematic */}
+      {gameState.pendingBoardEvent && (
+        <div className="tv-event-banner" style={{ borderColor: '#ff4400', background: 'rgba(40,10,5,0.95)' }}>
+          <h3 style={{ color: '#ff6633' }}>{gameState.pendingBoardEvent.name}</h3>
+          <p>{gameState.pendingBoardEvent.description}</p>
+        </div>
+      )}
+
+      {/* Active hazards indicator */}
+      {(gameState.activeHazards?.length > 0 || gameState.disabledEdges?.length > 0) && (
+        <div style={{
+          position: 'absolute', bottom: 16, left: 16,
+          background: 'rgba(10,10,26,0.85)', borderRadius: 'var(--radius)',
+          padding: '8px 14px', backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,100,50,0.3)', fontSize: '0.75rem',
+        }}>
+          <span style={{ color: '#ff6633' }}>
+            {gameState.disabledEdges?.length || 0} path(s) blocked
+          </span>
         </div>
       )}
     </div>

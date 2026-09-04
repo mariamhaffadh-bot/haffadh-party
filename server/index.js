@@ -124,11 +124,11 @@ wss.on('connection', (ws) => {
         break;
       }
 
-      case 'choose_path': {
+      case 'choose_fork': {
         if (!room) break;
-        const result = room.choosePath(clientId, msg.pathIndex);
+        const result = room.chooseFork(clientId, msg.chosenNodeId);
         if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
-        broadcastToRoom(currentRoom, { type: 'path_chosen', state: room.getPublicState() });
+        broadcastToRoom(currentRoom, { type: 'fork_chosen', ...result, state: room.getPublicState() });
         break;
       }
 
@@ -142,7 +142,7 @@ wss.on('connection', (ws) => {
 
       case 'skip_idol': {
         if (!room) break;
-        room.skipIdol(clientId);
+        room.skipIdol();
         broadcastToRoom(currentRoom, { type: 'state_update', state: room.getPublicState() });
         break;
       }
@@ -157,7 +157,7 @@ wss.on('connection', (ws) => {
 
       case 'leave_shop': {
         if (!room) break;
-        room.leaveShop(clientId);
+        room.leaveShop();
         broadcastToRoom(currentRoom, { type: 'state_update', state: room.getPublicState() });
         break;
       }

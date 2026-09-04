@@ -50,7 +50,7 @@ export default function useWebSocket() {
         case 'player_connected':
         case 'player_disconnected':
         case 'dice_rolled':
-        case 'path_chosen':
+        case 'fork_chosen':
         case 'idol_bought':
         case 'item_bought':
         case 'item_used':

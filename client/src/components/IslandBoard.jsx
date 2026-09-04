@@ -1,6 +1,4 @@
-import React, { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import React from 'react';
 import { BoardPath } from './BoardPath';
 import { Water } from './Water';
 import { Terrain } from './Terrain';
@@ -9,26 +7,13 @@ import { Volcano } from './Volcano';
 import { PlayerTokens } from './PlayerTokens';
 
 export default function IslandBoard({ gameState }) {
-  const groupRef = useRef();
-
   return (
-    <group ref={groupRef}>
-      {/* Ocean water plane */}
+    <group>
       <Water />
-
-      {/* Island terrain */}
       <Terrain />
-
-      {/* Volcano */}
       <Volcano />
-
-      {/* Vegetation (palms, bushes, jungle) */}
       <Vegetation />
-
-      {/* Board path with space markers */}
-      <BoardPath spaces={gameState?.boardSpaces} />
-
-      {/* Player tokens */}
+      <BoardPath nodes={gameState?.boardNodes} />
       <PlayerTokens gameState={gameState} />
     </group>
   );

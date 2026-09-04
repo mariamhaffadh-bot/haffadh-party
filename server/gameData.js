@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════
-// HAFFADH PARTY — Original Lore & Game Data (v2)
+// HAFFADH PARTY — Original Lore & Game Data (v3)
 // Island: Nakhlah Isle — a volcanic tropical island
-// The board spirals from the beach up the volcano to the summit
+// Board: branching node-graph from beach to crater peak
 // ═══════════════════════════════════════════════════════
 
 const CHARACTERS = [
@@ -15,189 +15,182 @@ const CHARACTERS = [
   { id: 'mahli',  name: 'Mahli',  species: 'Silver Dolphin',     color: '#95A5A6', accent: '#707B7C', description: 'A playful dolphin who leaps between the waves.' },
 ];
 
-// ─── Board: 36 spaces spiraling from beach to volcano summit ───
-// Regions ascend: beach → jungle → cliffside → volcano_rim → summit
-const BOARD_SPACES = [
-  // ── Beach (0-6) ──
-  { index: 0,  type: 'start',     name: 'Palm Harbour',          region: 'beach',    elevation: 0 },
-  { index: 1,  type: 'coin_gain', name: 'Shell Scatter',         region: 'beach',    elevation: 0.1, amount: 3 },
-  { index: 2,  type: 'event',     name: 'Tidal Whisper',         region: 'beach',    elevation: 0.15 },
-  { index: 3,  type: 'item_shop', name: 'Driftwood Bazaar',      region: 'beach',    elevation: 0.2 },
-  { index: 4,  type: 'coin_gain', name: 'Crab Stash',            region: 'beach',    elevation: 0.3, amount: 2 },
-  { index: 5,  type: 'idol_shrine', name: 'Tidepool Shrine',     region: 'beach',    elevation: 0.35, baseCost: 10 },
-  { index: 6,  type: 'coin_loss', name: 'Quicksand Pit',         region: 'beach',    elevation: 0.4, amount: 2 },
+// ═══════════════════════════════════════════════════════
+// BOARD GRAPH — 45 nodes, branching paths from beach to crater
+// Each node: { id, name, type, region, position:[x,y,z], connections:[id...] }
+// Regions: beach, jungle, cliffside, volcano_rim, summit
+// ═══════════════════════════════════════════════════════
 
-  // ── Jungle (7-14) ──
-  { index: 7,  type: 'event',     name: 'Monsoon Warning',       region: 'jungle',   elevation: 0.5 },
-  { index: 8,  type: 'coin_gain', name: 'Banana Cache',          region: 'jungle',   elevation: 0.6, amount: 3 },
-  { index: 9,  type: 'branch',    name: 'Fork of Fronds',        region: 'jungle',   elevation: 0.65, branches: [10, 13] },
-  // Left fork (longer, safer)
-  { index: 10, type: 'coin_gain', name: 'Honeycomb Hollow',      region: 'jungle',   elevation: 0.7, amount: 4 },
-  { index: 11, type: 'item_shop', name: 'Canopy Market',         region: 'jungle',   elevation: 0.75 },
-  { index: 12, type: 'event',     name: 'Firefly Swarm',         region: 'jungle',   elevation: 0.8 },
-  // Right fork (shorter, risky)
-  { index: 13, type: 'coin_loss', name: 'Pitcher Plant Trap',    region: 'jungle',   elevation: 0.75, amount: 4 },
-  // Merge
-  { index: 14, type: 'idol_shrine', name: 'Firebloom Shrine',    region: 'jungle',   elevation: 0.85, baseCost: 15 },
+const BOARD_NODES = [
+  // ── BEACH ZONE (elevation 0-1) ──
+  { id: 'start',       name: 'Palm Harbour',        type: 'start',       region: 'beach',    position: [16, 0.3, 0],     connections: ['b1'] },
+  { id: 'b1',          name: 'Shell Scatter',        type: 'coin_gain',   region: 'beach',    position: [14, 0.4, 4],     connections: ['b2'],       amount: 3 },
+  { id: 'b2',          name: 'Tidal Whisper',        type: 'event',       region: 'beach',    position: [12, 0.5, 7],     connections: ['b3'] },
+  { id: 'b3',          name: 'Driftwood Bazaar',     type: 'item_shop',   region: 'beach',    position: [9, 0.6, 9],      connections: ['b_fork'] },
+  // ── BEACH FORK: coastal route vs tidal shortcut ──
+  { id: 'b_fork',      name: 'Tidal Crossing',       type: 'fork',        region: 'beach',    position: [6, 0.7, 10],     connections: ['b4', 'b_tide1'] },
+  // Main coastal route (safe, longer)
+  { id: 'b4',          name: 'Crab Stash',           type: 'coin_gain',   region: 'beach',    position: [3, 0.8, 11],     connections: ['b5'],       amount: 2 },
+  { id: 'b5',          name: 'Tidepool Shrine',      type: 'idol_shrine', region: 'beach',    position: [0, 0.9, 11],     connections: ['b6'],       baseCost: 10 },
+  { id: 'b6',          name: 'Quicksand Pit',        type: 'coin_loss',   region: 'beach',    position: [-3, 1.0, 10],    connections: ['j_merge'],  amount: 2 },
+  // Tidal shortcut (short, risky — can be submerged by tide event)
+  { id: 'b_tide1',     name: 'Sandbar Dash',         type: 'coin_loss',   region: 'beach',    position: [3, 0.3, 13],     connections: ['b_tide2'],  amount: 3, tidalEdge: true },
+  { id: 'b_tide2',     name: 'Reef Hop',             type: 'event',       region: 'beach',    position: [-1, 0.4, 12],    connections: ['j_merge'],  tidalEdge: true },
 
-  // ── Cliffside (15-22) ──
-  { index: 15, type: 'coin_gain', name: 'Gem Vein',              region: 'cliffside', elevation: 1.0, amount: 4 },
-  { index: 16, type: 'duel',      name: 'Rope Bridge Standoff',  region: 'cliffside', elevation: 1.1 },
-  { index: 17, type: 'event',     name: 'Rockslide!',            region: 'cliffside', elevation: 1.2 },
-  { index: 18, type: 'coin_loss', name: 'Eagle Toll',            region: 'cliffside', elevation: 1.3, amount: 3 },
-  { index: 19, type: 'item_shop', name: 'Cliff Outpost',         region: 'cliffside', elevation: 1.4 },
-  { index: 20, type: 'idol_shrine', name: 'Stormwatch Shrine',   region: 'cliffside', elevation: 1.5, baseCost: 20 },
-  { index: 21, type: 'coin_gain', name: 'Crystal Cave',          region: 'cliffside', elevation: 1.6, amount: 5 },
-  { index: 22, type: 'duel',      name: 'Switchback Clash',      region: 'cliffside', elevation: 1.7 },
+  // ── JUNGLE ZONE (elevation 1-3) ──
+  { id: 'j_merge',     name: 'Jungle Gate',          type: 'coin_gain',   region: 'jungle',   position: [-5, 1.3, 8],     connections: ['j1'],       amount: 3 },
+  { id: 'j1',          name: 'Banana Cache',         type: 'coin_gain',   region: 'jungle',   position: [-7, 1.6, 6],     connections: ['j2'],       amount: 3 },
+  { id: 'j2',          name: 'Canopy Market',        type: 'item_shop',   region: 'jungle',   position: [-9, 1.9, 3],     connections: ['j_fork'],   movingShop: true },
+  // ── JUNGLE FORK: vine bridge shortcut vs long path ──
+  { id: 'j_fork',      name: 'Fork of Fronds',       type: 'fork',        region: 'jungle',   position: [-10, 2.1, 0],    connections: ['j3', 'j_vine1'] },
+  // Long jungle path (safer, more loot)
+  { id: 'j3',          name: 'Firefly Swarm',        type: 'event',       region: 'jungle',   position: [-11, 2.3, -3],   connections: ['j4'] },
+  { id: 'j4',          name: 'Honeycomb Hollow',     type: 'coin_gain',   region: 'jungle',   position: [-11, 2.5, -6],   connections: ['j5'],       amount: 4 },
+  { id: 'j5',          name: 'Firebloom Shrine',     type: 'idol_shrine', region: 'jungle',   position: [-10, 2.7, -8],   connections: ['j6'],       baseCost: 15 },
+  { id: 'j6',          name: 'Pitcher Plant Trap',   type: 'coin_loss',   region: 'jungle',   position: [-8, 2.9, -10],   connections: ['c_merge'],  amount: 3 },
+  // Vine bridge shortcut (risky — can collapse)
+  { id: 'j_vine1',     name: 'Vine Bridge',          type: 'coin_loss',   region: 'jungle',   position: [-9, 2.5, -4],    connections: ['j_vine2'],  amount: 2, bridgeEdge: true },
+  { id: 'j_vine2',     name: 'Mossy Ledge',          type: 'event',       region: 'jungle',   position: [-8, 2.8, -8],    connections: ['c_merge'],  bridgeEdge: true },
 
-  // ── Volcano Rim (23-30) ──
-  { index: 23, type: 'event',     name: 'Lava Burst',            region: 'volcano_rim', elevation: 1.9 },
-  { index: 24, type: 'coin_gain', name: 'Obsidian Shards',       region: 'volcano_rim', elevation: 2.0, amount: 5 },
-  { index: 25, type: 'coin_loss', name: 'Sulfur Cloud',          region: 'volcano_rim', elevation: 2.1, amount: 4 },
-  { index: 26, type: 'item_shop', name: 'Ember Forge',           region: 'volcano_rim', elevation: 2.2 },
-  { index: 27, type: 'branch',    name: 'Lava Fork',             region: 'volcano_rim', elevation: 2.3, branches: [28, 30] },
-  // Left (scenic route)
-  { index: 28, type: 'coin_gain', name: 'Magma Geode',           region: 'volcano_rim', elevation: 2.4, amount: 6 },
-  { index: 29, type: 'event',     name: 'Eruption Tremor',       region: 'volcano_rim', elevation: 2.5 },
-  // Right (express but costly)
-  { index: 30, type: 'coin_loss', name: 'Ash Storm',             region: 'volcano_rim', elevation: 2.5, amount: 5 },
-  // Merge
-  { index: 31, type: 'idol_shrine', name: 'Caldera Shrine',      region: 'volcano_rim', elevation: 2.7, baseCost: 25 },
-  { index: 32, type: 'duel',      name: 'Rim Duel Ring',         region: 'volcano_rim', elevation: 2.8 },
+  // ── CLIFFSIDE ZONE (elevation 3-5) ──
+  { id: 'c_merge',     name: 'Cliff Ascent',         type: 'coin_gain',   region: 'cliffside', position: [-6, 3.2, -11],  connections: ['c1'],       amount: 4 },
+  { id: 'c1',          name: 'Rope Bridge Standoff', type: 'duel',        region: 'cliffside', position: [-3, 3.5, -12],  connections: ['c2'] },
+  { id: 'c2',          name: 'Rockslide Pass',       type: 'event',       region: 'cliffside', position: [0, 3.8, -12],   connections: ['c3'] },
+  { id: 'c3',          name: 'Eagle Toll',           type: 'coin_loss',   region: 'cliffside', position: [3, 4.1, -11],   connections: ['c_fork'],   amount: 3 },
+  // ── CLIFF FORK: rope bridge express vs switchback ──
+  { id: 'c_fork',      name: 'Ravine Edge',          type: 'fork',        region: 'cliffside', position: [5, 4.3, -9],    connections: ['c4', 'c_rope1'] },
+  // Switchback (long, steady)
+  { id: 'c4',          name: 'Cliff Outpost',        type: 'item_shop',   region: 'cliffside', position: [7, 4.5, -7],    connections: ['c5'] },
+  { id: 'c5',          name: 'Stormwatch Shrine',    type: 'idol_shrine', region: 'cliffside', position: [8, 4.8, -4],    connections: ['c6'],       baseCost: 20 },
+  { id: 'c6',          name: 'Crystal Cave',         type: 'coin_gain',   region: 'cliffside', position: [8, 5.0, -1],    connections: ['v_merge'],  amount: 5 },
+  // Rope bridge express (can be destroyed by hazard)
+  { id: 'c_rope1',     name: 'Rope Crossing',        type: 'coin_loss',   region: 'cliffside', position: [7, 4.6, -5],    connections: ['c_rope2'],  amount: 2, bridgeEdge: true },
+  { id: 'c_rope2',     name: 'Wind Gust',            type: 'event',       region: 'cliffside', position: [8, 4.9, -2],    connections: ['v_merge'],  bridgeEdge: true },
 
-  // ── Summit (33-35) ──
-  { index: 33, type: 'coin_gain', name: 'Starfall Ledge',        region: 'summit', elevation: 3.0, amount: 7 },
-  { index: 34, type: 'event',     name: 'Peak Winds',            region: 'summit', elevation: 3.2 },
-  { index: 35, type: 'idol_shrine', name: 'The Sunfire Crown',   region: 'summit', elevation: 3.5, baseCost: 35 },
+  // ── VOLCANO RIM ZONE (elevation 5-7) ──
+  { id: 'v_merge',     name: 'Volcano Gate',         type: 'coin_gain',   region: 'volcano_rim', position: [7, 5.3, 2],   connections: ['v1'],       amount: 5 },
+  { id: 'v1',          name: 'Lava Burst',           type: 'event',       region: 'volcano_rim', position: [6, 5.6, 5],   connections: ['v2'] },
+  { id: 'v2',          name: 'Obsidian Shards',      type: 'coin_gain',   region: 'volcano_rim', position: [4, 5.9, 7],   connections: ['v3'],       amount: 5 },
+  { id: 'v3',          name: 'Ember Forge',          type: 'item_shop',   region: 'volcano_rim', position: [2, 6.2, 8],   connections: ['v4'] },
+  { id: 'v4',          name: 'Sulfur Cloud',         type: 'coin_loss',   region: 'volcano_rim', position: [0, 6.4, 8],   connections: ['v_fork'],   amount: 4 },
+  // ── VOLCANO FORK: lava field gamble vs safe ridge ──
+  { id: 'v_fork',      name: 'Lava Fork',            type: 'fork',        region: 'volcano_rim', position: [-2, 6.6, 7],  connections: ['v5', 'v_lava1'] },
+  // Safe ridge (longer)
+  { id: 'v5',          name: 'Ash Ridge',            type: 'event',       region: 'volcano_rim', position: [-4, 6.8, 5],  connections: ['v6'] },
+  { id: 'v6',          name: 'Caldera Shrine',       type: 'idol_shrine', region: 'volcano_rim', position: [-5, 7.0, 3],  connections: ['v7'],       baseCost: 25 },
+  { id: 'v7',          name: 'Rim Duel Ring',        type: 'duel',        region: 'volcano_rim', position: [-5, 7.2, 0],  connections: ['s_merge'] },
+  // Lava field gamble (short, can be blocked by lava flow)
+  { id: 'v_lava1',     name: 'Magma Geode',          type: 'coin_gain',   region: 'volcano_rim', position: [-4, 7.0, 4],  connections: ['v_lava2'],  amount: 7, lavaEdge: true },
+  { id: 'v_lava2',     name: 'Eruption Tremor',      type: 'coin_loss',   region: 'volcano_rim', position: [-5, 7.2, 1],  connections: ['s_merge'],  amount: 5, lavaEdge: true },
+
+  // ── SUMMIT ZONE (elevation 7-9) ──
+  { id: 's_merge',     name: 'Crater Rim',           type: 'coin_gain',   region: 'summit',   position: [-4, 7.5, -2],    connections: ['s1'],       amount: 6 },
+  { id: 's1',          name: 'Starfall Ledge',       type: 'event',       region: 'summit',   position: [-2, 8.0, -3],    connections: ['s2'] },
+  { id: 's2',          name: 'Peak Winds',           type: 'duel',        region: 'summit',   position: [0, 8.5, -2],     connections: ['summit'] },
+  { id: 'summit',      name: 'The Sunfire Crown',    type: 'summit_shrine', region: 'summit', position: [0, 9.0, 0],      connections: ['start'],    baseCost: 35 },
 ];
 
-// Idol shrines with escalating costs
+// ─── Idol Shrines ───
 const IDOL_SHRINES = [
-  { id: 'tidepool_idol',   name: 'Tidepool Idol',   spaceIndex: 5,  baseCost: 10, description: 'A coral idol humming with ocean tides.' },
-  { id: 'firebloom_idol',  name: 'Firebloom Idol',  spaceIndex: 14, baseCost: 15, description: 'An idol wreathed in ever-burning petals.' },
-  { id: 'stormwatch_idol', name: 'Stormwatch Idol',  spaceIndex: 20, baseCost: 20, description: 'An idol crackling with captured lightning.' },
-  { id: 'caldera_idol',    name: 'Caldera Idol',     spaceIndex: 31, baseCost: 25, description: 'An idol forged in the volcano\'s heart.' },
-  { id: 'sunfire_crown',   name: 'The Sunfire Crown', spaceIndex: 35, baseCost: 35, description: 'The rarest idol — the molten crown atop the summit. Legend says it holds the island\'s soul.' },
+  { id: 'tidepool_idol',   name: 'Tidepool Idol',    nodeId: 'b5',     baseCost: 10, description: 'A coral idol humming with ocean tides.' },
+  { id: 'firebloom_idol',  name: 'Firebloom Idol',   nodeId: 'j5',     baseCost: 15, description: 'An idol wreathed in ever-burning petals.' },
+  { id: 'stormwatch_idol', name: 'Stormwatch Idol',  nodeId: 'c5',     baseCost: 20, description: 'An idol crackling with captured lightning.' },
+  { id: 'caldera_idol',    name: 'Caldera Idol',     nodeId: 'v6',     baseCost: 25, description: 'An idol forged in the volcano\'s heart.' },
+  { id: 'sunfire_crown',   name: 'The Sunfire Crown', nodeId: 'summit', baseCost: 35, description: 'The rarest idol at the volcano peak. Legend says it holds the island\'s soul.' },
 ];
 
 // ─── Items ───
 const ITEMS = [
-  {
-    id: 'tailwind_charm',
-    name: 'Tailwind Charm',
-    cost: 5,
-    description: 'Grants a bonus +3 to your next dice roll.',
-    effect: 'bonus_roll',
-    value: 3,
-  },
-  {
-    id: 'thornvine_trap',
-    name: 'Thornvine Trap',
-    cost: 6,
-    description: 'Drop on any space — the next player who lands there loses 4 coins.',
-    effect: 'hazard',
-    value: 4,
-  },
-  {
-    id: 'phantom_hand',
-    name: 'Phantom Hand',
-    cost: 10,
-    description: 'Use at an Idol Shrine to steal one Idol from an opponent instead of buying.',
-    effect: 'steal_idol',
-    value: 1,
-  },
-  {
-    id: 'coral_shield',
-    name: 'Coral Shield',
-    cost: 4,
-    description: 'Blocks one incoming steal, hazard, or coin-loss event. Auto-triggers.',
-    effect: 'shield',
-    value: 1,
-  },
+  { id: 'tailwind_charm', name: 'Tailwind Charm', cost: 5, description: 'Grants a bonus +3 to your next dice roll.', effect: 'bonus_roll', value: 3 },
+  { id: 'thornvine_trap', name: 'Thornvine Trap', cost: 6, description: 'Drop on any space — the next player who lands there loses 4 coins.', effect: 'hazard', value: 4 },
+  { id: 'phantom_hand',   name: 'Phantom Hand',   cost: 10, description: 'Use at an Idol Shrine to steal one Idol from an opponent instead of buying.', effect: 'steal_idol', value: 1 },
+  { id: 'coral_shield',   name: 'Coral Shield',   cost: 4, description: 'Blocks one incoming steal, hazard, or coin-loss event. Auto-triggers.', effect: 'shield', value: 1 },
 ];
 
 // ─── Random Events ───
 const RANDOM_EVENTS = [
-  { id: 'trade_winds',    name: 'Trade Winds Blow!',      description: 'Favorable winds fill your sails.', effect: 'gain_coins', value: 4 },
-  { id: 'monsoon',        name: 'Monsoon Season!',         description: 'Heavy rains wash away some coins.', effect: 'lose_coins', value: 3 },
-  { id: 'treasure_map',   name: 'Treasure Map Found!',     description: 'An old map leads to buried coins.', effect: 'gain_coins', value: 6 },
-  { id: 'coin_swap',      name: 'Island Spirit Swap!',     description: 'The island spirits swap your fortune with another player.', effect: 'swap_coins', value: 0 },
-  { id: 'current_push',   name: 'Strong Current!',         description: 'A current pushes you forward.', effect: 'move_forward', value: 2 },
-  { id: 'undertow',       name: 'Undertow!',               description: 'You get pulled back by the undertow.', effect: 'move_backward', value: 3 },
-  { id: 'coconut_rain',   name: 'Coconut Rain!',           description: 'Coconuts fall from the trees — collect them!', effect: 'gain_coins', value: 3 },
-  { id: 'hermit_tax',     name: 'Hermit Crab Tax',         description: 'The local crabs demand a toll.', effect: 'lose_coins', value: 2 },
-  { id: 'dolphins_gift',  name: 'Dolphin\'s Gift',         description: 'A friendly dolphin brings you shells.', effect: 'gain_coins', value: 5 },
-  { id: 'volcano_rumble', name: 'Volcano Rumble!',         description: 'The ground shakes — watch your step!', effect: 'lose_coins', value: 4 },
+  { id: 'trade_winds',    name: 'Trade Winds Blow!',  description: 'Favorable winds fill your sails.', effect: 'gain_coins', value: 4 },
+  { id: 'monsoon',        name: 'Monsoon Season!',     description: 'Heavy rains wash away some coins.', effect: 'lose_coins', value: 3 },
+  { id: 'treasure_map',   name: 'Treasure Map Found!', description: 'An old map leads to buried coins.', effect: 'gain_coins', value: 6 },
+  { id: 'coin_swap',      name: 'Island Spirit Swap!', description: 'The island spirits swap your fortune with another player.', effect: 'swap_coins', value: 0 },
+  { id: 'current_push',   name: 'Strong Current!',     description: 'A current pushes you forward.', effect: 'move_forward', value: 2 },
+  { id: 'coconut_rain',   name: 'Coconut Rain!',       description: 'Coconuts fall from the trees — collect them!', effect: 'gain_coins', value: 3 },
+  { id: 'hermit_tax',     name: 'Hermit Crab Tax',     description: 'The local crabs demand a toll.', effect: 'lose_coins', value: 2 },
+  { id: 'dolphins_gift',  name: 'Dolphin\'s Gift',     description: 'A friendly dolphin brings you shells.', effect: 'gain_coins', value: 5 },
+  { id: 'volcano_rumble', name: 'Volcano Rumble!',     description: 'The ground shakes — watch your step!', effect: 'lose_coins', value: 4 },
+];
+
+// ─── Dynamic Board Hazard Events ───
+const BOARD_HAZARDS = [
+  {
+    id: 'bridge_collapse',
+    name: 'Bridge Collapse!',
+    description: 'A vine bridge snaps and falls into the ravine!',
+    targetTag: 'bridgeEdge', // disables edges tagged bridgeEdge
+    duration: -1,            // permanent until repair event
+    effect: 'disable_edge',
+  },
+  {
+    id: 'lava_flow',
+    name: 'Lava Flow!',
+    description: 'Molten lava pours across the path — it will cool in one round.',
+    targetTag: 'lavaEdge',
+    duration: 1,             // blocks for 1 round, then recedes
+    effect: 'disable_edge',
+  },
+  {
+    id: 'tide_submerge',
+    name: 'Rising Tide!',
+    description: 'The tide rises, submerging the beach shortcut!',
+    targetTag: 'tidalEdge',
+    duration: 2,             // submerged for 2 rounds
+    effect: 'disable_edge',
+  },
+  {
+    id: 'tide_recede',
+    name: 'Tide Recedes!',
+    description: 'The water pulls back, revealing the sandbar shortcut!',
+    targetTag: 'tidalEdge',
+    duration: 0,
+    effect: 'enable_edge',   // re-enables tidal edges
+  },
+  {
+    id: 'shop_relocate',
+    name: 'Wandering Merchant!',
+    description: 'The Canopy Market packs up and moves to a new location!',
+    effect: 'relocate_shop',
+  },
+  {
+    id: 'bridge_repair',
+    name: 'Bridge Repaired!',
+    description: 'Island builders have repaired the vine bridge!',
+    targetTag: 'bridgeEdge',
+    duration: 0,
+    effect: 'enable_edge',
+  },
 ];
 
 // ─── Minigame Templates ───
 const MINIGAME_TEMPLATES = [
-  {
-    id: 'tap_race',
-    name: 'Coconut Tap Dash',
-    description: 'Tap as fast as you can to crack open coconuts!',
-    type: 'tap_race',
-    minPlayers: 2,
-    maxPlayers: 8,
-    duration: 10000,
-  },
-  {
-    id: 'balance',
-    name: 'Tightrope Tilt',
-    description: 'Tilt your phone to keep balance on the rope bridge!',
-    type: 'balance',
-    minPlayers: 2,
-    maxPlayers: 8,
-    duration: 15000,
-  },
-  {
-    id: 'memory',
-    name: 'Shell Memory',
-    description: 'Match pairs of island shells before time runs out!',
-    type: 'memory',
-    minPlayers: 1,
-    maxPlayers: 8,
-    duration: 30000,
-  },
-  {
-    id: 'tug_of_war',
-    name: 'Vine Tug',
-    description: 'Mash the button to pull the vine to your side!',
-    type: 'tug_of_war',
-    minPlayers: 2,
-    maxPlayers: 8,
-    duration: 8000,
-  },
-  {
-    id: 'reaction',
-    name: 'Firefly Catch',
-    description: 'Tap when the firefly lights up — fastest reaction wins!',
-    type: 'reaction',
-    minPlayers: 2,
-    maxPlayers: 8,
-    duration: 5000,
-  },
+  { id: 'tap_race',   name: 'Coconut Tap Dash',  description: 'Tap as fast as you can to crack open coconuts!', type: 'tap_race',   duration: 10000 },
+  { id: 'balance',    name: 'Tightrope Tilt',     description: 'Tilt your phone to keep balance on the rope bridge!', type: 'balance',    duration: 15000 },
+  { id: 'memory',     name: 'Shell Memory',        description: 'Match pairs of island shells before time runs out!', type: 'memory',     duration: 30000 },
+  { id: 'tug_of_war', name: 'Vine Tug',            description: 'Mash the button to pull the vine to your side!', type: 'tug_of_war', duration: 8000 },
+  { id: 'reaction',   name: 'Firefly Catch',       description: 'Tap when the firefly lights up — fastest reaction wins!', type: 'reaction',   duration: 5000 },
 ];
 
-// ─── Bonus Idol Achievements (revealed at end of game) ───
+// ─── Bonus Achievements ───
 const BONUS_ACHIEVEMENTS = [
-  { id: 'minigame_master', name: 'Minigame Master',    description: 'Won the most minigames.',     stat: 'minigamesWon' },
-  { id: 'coin_hoarder',    name: 'Coin Hoarder',       description: 'Held the most coins at end.', stat: 'coins' },
-  { id: 'trailblazer',     name: 'Trailblazer',        description: 'Traveled the most spaces.',   stat: 'spacesTraveled' },
-  { id: 'duel_champion',   name: 'Duel Champion',      description: 'Won the most duels.',         stat: 'duelsWon' },
+  { id: 'minigame_master', name: 'Minigame Master', description: 'Won the most minigames.',     stat: 'minigamesWon' },
+  { id: 'coin_hoarder',    name: 'Coin Hoarder',    description: 'Held the most coins at end.', stat: 'coins' },
+  { id: 'trailblazer',     name: 'Trailblazer',     description: 'Traveled the most spaces.',   stat: 'spacesTraveled' },
+  { id: 'duel_champion',   name: 'Duel Champion',   description: 'Won the most duels.',         stat: 'duelsWon' },
 ];
 
-// ─── Minigame ranked payout table ───
-// payouts[placement] = coins awarded (0-indexed: 0=1st, 1=2nd, etc.)
 const MINIGAME_PAYOUTS = [10, 6, 3, 1];
 
 module.exports = {
-  CHARACTERS,
-  BOARD_SPACES,
-  IDOL_SHRINES,
-  ITEMS,
-  RANDOM_EVENTS,
-  MINIGAME_TEMPLATES,
-  BONUS_ACHIEVEMENTS,
-  MINIGAME_PAYOUTS,
+  CHARACTERS, BOARD_NODES, IDOL_SHRINES, ITEMS,
+  RANDOM_EVENTS, BOARD_HAZARDS, MINIGAME_TEMPLATES,
+  BONUS_ACHIEVEMENTS, MINIGAME_PAYOUTS,
 };

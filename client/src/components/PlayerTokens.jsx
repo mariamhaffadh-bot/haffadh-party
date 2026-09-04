@@ -1,7 +1,7 @@
-import React, { useRef, useMemo, useState, useEffect } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { getSpacePositions } from './BoardPath';
+import { getNodePosition } from './BoardPath';
 import { getCharacter } from '../utils/characters';
 
 function PlayerToken({ player, targetPosition, index }) {
@@ -11,79 +11,72 @@ function PlayerToken({ player, targetPosition, index }) {
   const [currentPos] = useState(() => new THREE.Vector3(...targetPosition));
   const targetVec = useMemo(() => new THREE.Vector3(...targetPosition), [targetPosition]);
 
-  // Smooth movement
   useFrame((state, delta) => {
     if (!meshRef.current) return;
     currentPos.lerp(targetVec, 3 * delta);
-
-    // Hop animation during movement
     const dist = currentPos.distanceTo(targetVec);
     const hop = dist > 0.1 ? Math.abs(Math.sin(state.clock.elapsedTime * 8)) * 0.5 : 0;
 
-    meshRef.current.position.set(currentPos.x + index * 0.4, currentPos.y + 0.5 + hop, currentPos.z);
-
-    // Idle bobbing
-    meshRef.current.position.y += Math.sin(state.clock.elapsedTime * 2 + index) * 0.05;
-
-    // Gentle rotation
+    // Offset tokens so they don't overlap
+    const offsetAngle = (index / 8) * Math.PI * 2;
+    const offsetR = 0.35;
+    meshRef.current.position.set(
+      currentPos.x + Math.cos(offsetAngle) * offsetR,
+      currentPos.y + 0.5 + hop + Math.sin(state.clock.elapsedTime * 2 + index) * 0.04,
+      currentPos.z + Math.sin(offsetAngle) * offsetR
+    );
     meshRef.current.rotation.y += delta * 0.5;
   });
 
   return (
     <group ref={meshRef}>
-      {/* Body capsule */}
+      {/* Body — stylized capsule */}
       <mesh castShadow>
-        <capsuleGeometry args={[0.2, 0.3, 8, 12]} />
+        <capsuleGeometry args={[0.18, 0.28, 4, 8]} />
         <meshStandardMaterial
           color={color}
-          roughness={0.3}
-          metalness={0.2}
-          emissive={color}
-          emissiveIntensity={0.15}
+          roughness={0.5}
+          metalness={0.0}
+          flatShading
         />
       </mesh>
       {/* Eyes */}
-      <mesh position={[0.08, 0.15, 0.18]}>
-        <sphereGeometry args={[0.05, 8, 8]} />
+      <mesh position={[0.07, 0.14, 0.16]}>
+        <sphereGeometry args={[0.05, 6, 6]} />
         <meshBasicMaterial color="white" />
       </mesh>
-      <mesh position={[-0.08, 0.15, 0.18]}>
-        <sphereGeometry args={[0.05, 8, 8]} />
+      <mesh position={[-0.07, 0.14, 0.16]}>
+        <sphereGeometry args={[0.05, 6, 6]} />
         <meshBasicMaterial color="white" />
       </mesh>
-      {/* Pupils */}
-      <mesh position={[0.08, 0.15, 0.22]}>
-        <sphereGeometry args={[0.025, 8, 8]} />
+      <mesh position={[0.07, 0.14, 0.2]}>
+        <sphereGeometry args={[0.025, 6, 6]} />
         <meshBasicMaterial color="#111" />
       </mesh>
-      <mesh position={[-0.08, 0.15, 0.22]}>
-        <sphereGeometry args={[0.025, 8, 8]} />
+      <mesh position={[-0.07, 0.14, 0.2]}>
+        <sphereGeometry args={[0.025, 6, 6]} />
         <meshBasicMaterial color="#111" />
       </mesh>
-      {/* Name label glow */}
-      <pointLight position={[0, 0.6, 0]} color={color} intensity={0.5} distance={2} />
+      {/* Outline ring at feet */}
+      <mesh position={[0, -0.22, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.18, 0.24, 12]} />
+        <meshBasicMaterial color="#111" side={THREE.DoubleSide} />
+      </mesh>
     </group>
   );
 }
 
 export function PlayerTokens({ gameState }) {
   const players = gameState?.players || {};
-  const boardSpaces = gameState?.boardSpaces || [];
-  const positions = useMemo(() => getSpacePositions(boardSpaces.length || 35), [boardSpaces.length]);
-
+  const nodes = gameState?.boardNodes || [];
   const playerList = Object.values(players);
 
   return (
     <group>
       {playerList.map((player, i) => {
-        const pos = positions[player.position] || positions[0] || [0, 1, 0];
+        const pos = getNodePosition(nodes, player.nodeId);
         return (
-          <PlayerToken
-            key={player.id}
-            player={player}
-            targetPosition={pos}
-            index={i}
-          />
+          <PlayerToken key={player.id} player={player} targetPosition={pos} index={i} />
         );
       })}
     </group>

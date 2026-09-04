@@ -179,21 +179,31 @@ export default function GameScreenPhone() {
         <div className="dice-result">{gameState.lastDiceRoll}</div>
       )}
 
-      {/* Branch choice */}
-      {isMyTurn && gameState.turnPhase === 'choosing_path' && (
-        <div className="event-card">
-          <h3>Choose Your Path!</h3>
-          <p style={{ color: 'var(--text-dim)', marginBottom: 12 }}>Two paths diverge on the mountainside...</p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary btn-small" onClick={() => send({ type: 'choose_path', pathIndex: 0 })}>
-              Left Path
-            </button>
-            <button className="btn btn-secondary btn-small" onClick={() => send({ type: 'choose_path', pathIndex: 1 })}>
-              Right Path
-            </button>
+      {/* Fork choice (graph-based) */}
+      {isMyTurn && gameState.turnPhase === 'choosing_fork' && gameState.pendingForkOptions && (() => {
+        const options = gameState.pendingForkOptions.options || [];
+        const nodes = gameState.boardNodes || [];
+        return (
+          <div className="event-card">
+            <h3>Choose Your Path!</h3>
+            <p style={{ color: 'var(--text-dim)', marginBottom: 12 }}>The path splits ahead...</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {options.map((nodeId, i) => {
+                const node = nodes.find((n) => n.id === nodeId);
+                return (
+                  <button
+                    key={nodeId}
+                    className={`btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} btn-small`}
+                    onClick={() => send({ type: 'choose_fork', chosenNodeId: nodeId })}
+                  >
+                    {node?.name || nodeId}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Idol Shrine */}
       {isMyTurn && gameState.turnPhase === 'buying_idol' && (() => {
