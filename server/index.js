@@ -124,11 +124,11 @@ wss.on('connection', (ws) => {
         break;
       }
 
-      case 'choose_fork': {
+      case 'move_step': {
         if (!room) break;
-        const result = room.chooseFork(clientId, msg.chosenNodeId);
+        const result = room.moveStep(clientId, msg.targetNodeId);
         if (result.error) { sendTo(ws, { type: 'error', message: result.error }); break; }
-        broadcastToRoom(currentRoom, { type: 'fork_chosen', ...result, state: room.getPublicState() });
+        broadcastToRoom(currentRoom, { type: 'player_moved', ...result, state: room.getPublicState() });
         break;
       }
 

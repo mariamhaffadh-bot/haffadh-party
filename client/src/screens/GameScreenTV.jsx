@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, Suspense } from 'react';
+import React, { useRef, useEffect, useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import useStore from '../store';
@@ -6,6 +6,7 @@ import IslandBoard from '../components/IslandBoard';
 import { Dice3D } from '../components/Dice3D';
 import { getCharacter } from '../utils/characters';
 import MinigameTVScene from '../minigames/MinigameTVScene';
+import { MinigameTransitionIn } from '../components/MinigameTransition';
 
 function CinematicCamera({ gameState }) {
   const controlsRef = useRef();
@@ -203,8 +204,26 @@ function GameOverOverlay({ gameState }) {
 
 export default function GameScreenTV() {
   const { gameState } = useStore();
+  const [showTransition, setShowTransition] = useState(false);
+  const [prevPhase, setPrevPhase] = useState(null);
+
+  // Detect phase change to minigame → show transition
+  React.useEffect(() => {
+    if (gameState?.phase === 'minigame' && prevPhase !== 'minigame') {
+      setShowTransition(true);
+    }
+    setPrevPhase(gameState?.phase);
+  }, [gameState?.phase]);
 
   if (gameState?.phase === 'minigame') {
+    if (showTransition) {
+      return (
+        <MinigameTransitionIn
+          minigame={gameState.activeMinigame}
+          onComplete={() => setShowTransition(false)}
+        />
+      );
+    }
     return <MinigameTVScene gameState={gameState} />;
   }
 

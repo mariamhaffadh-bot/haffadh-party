@@ -55,6 +55,9 @@ class GameRoom {
 
     // Pending fork choice
     this.pendingForkOptions = null;
+
+    // Step-by-step joystick movement
+    this.movesRemaining = 0;
   }
 
   getPlayerCount() { return this.players.size; }
@@ -109,24 +112,15 @@ class GameRoom {
     });
   }
 
-  // Walk `steps` along the graph, returning array of nodeIds visited.
-  // At forks, we queue a choice for the player.
+  // Walk `steps` along the graph (used by events like move_forward)
   walkPath(startNodeId, steps) {
-    const visited = [];
     let current = startNodeId;
     for (let i = 0; i < steps; i++) {
       const reachable = this.getReachableConnections(current);
-      if (reachable.length === 0) break; // dead end
-      if (reachable.length === 1) {
-        current = reachable[0];
-        visited.push(current);
-      } else {
-        // Fork — stop here, player must choose
-        visited.push(current); // they land on the fork node first
-        return { visited, fork: true, forkNodeId: current, options: reachable, stepsLeft: steps - i - 1 };
-      }
+      if (reachable.length === 0) break;
+      current = reachable[0]; // auto-pick first for event-driven movement
     }
-    return { visited, fork: false };
+    return current;
   }
 
   // ── Idol price ──
@@ -290,7 +284,7 @@ class GameRoom {
 
   leaveShop() { this.turnPhase = 'landed'; }
 
-  // ── Dice Roll + Graph Movement ──
+  // ── Dice Roll — sets movesRemaining, player uses joystick to step ──
   rollDice(clientId) {
     const currentPlayerId = this.getCurrentPlayerId();
     if (clientId !== currentPlayerId && !this.isPassAndPlay) return { error: 'Not your turn' };
@@ -303,67 +297,64 @@ class GameRoom {
       player.activeBonusRoll = 0;
     }
     this.lastDiceRoll = roll;
+    this.movesRemaining = roll;
     this.turnPhase = 'moving';
-    player.spacesTraveled += roll;
 
-    // Walk the graph
-    const result = this.walkPath(player.nodeId, roll);
-    const finalNodeId = result.visited[result.visited.length - 1] || player.nodeId;
+    // Return legal directions from current node
+    const legalMoves = this.getReachableConnections(player.nodeId);
+    return { roll, playerId: currentPlayerId, movesRemaining: roll, legalMoves };
+  }
 
-    if (result.fork) {
-      // Player landed on a fork with steps remaining
-      player.nodeId = result.forkNodeId;
-      this.pendingForkOptions = { options: result.options, stepsLeft: result.stepsLeft };
-      this.turnPhase = 'choosing_fork';
-      return { roll, playerId: currentPlayerId, path: result.visited, fork: true, options: result.options };
+  // ── Step: joystick-driven node-by-node movement ──
+  // Player pushes toward a connected node, consuming 1 move
+  moveStep(clientId, targetNodeId) {
+    const currentPlayerId = this.getCurrentPlayerId();
+    if (clientId !== currentPlayerId && !this.isPassAndPlay) return { error: 'Not your turn' };
+    if (this.turnPhase !== 'moving') return { error: 'Not in movement phase' };
+    if (this.movesRemaining <= 0) return { error: 'No moves left' };
+
+    const player = this.getCurrentPlayer();
+    const reachable = this.getReachableConnections(player.nodeId);
+
+    if (!reachable.includes(targetNodeId)) {
+      return { error: 'Cannot move there — not a connected node' };
     }
 
-    // Check if they passed through start (lap bonus)
-    if (result.visited.includes('start') && player.nodeId !== 'start') {
+    // Move one step
+    player.nodeId = targetNodeId;
+    player.spacesTraveled++;
+    this.movesRemaining--;
+
+    // Lap bonus if passing through start
+    if (targetNodeId === 'start') {
       player.coins += 5;
     }
 
-    player.nodeId = finalNodeId;
-    const effect = this.resolveNode(player, finalNodeId);
-    return { roll, playerId: currentPlayerId, path: result.visited, effect };
-  }
-
-  chooseFork(clientId, chosenNodeId) {
-    const currentPlayerId = this.getCurrentPlayerId();
-    if (clientId !== currentPlayerId && !this.isPassAndPlay) return { error: 'Not your turn' };
-    if (this.turnPhase !== 'choosing_fork') return { error: 'Not at a fork' };
-    if (!this.pendingForkOptions) return { error: 'No fork pending' };
-
-    const { options, stepsLeft } = this.pendingForkOptions;
-    if (!options.includes(chosenNodeId)) return { error: 'Invalid fork choice' };
-
-    const player = this.getCurrentPlayer();
-    player.nodeId = chosenNodeId;
-    this.pendingForkOptions = null;
-
-    // Continue walking remaining steps from the chosen branch
-    if (stepsLeft > 0) {
-      const result = this.walkPath(chosenNodeId, stepsLeft);
-      const finalNodeId = result.visited[result.visited.length - 1] || chosenNodeId;
-
-      if (result.fork) {
-        player.nodeId = result.forkNodeId;
-        this.pendingForkOptions = { options: result.options, stepsLeft: result.stepsLeft };
-        this.turnPhase = 'choosing_fork';
-        return { success: true, path: result.visited, fork: true, options: result.options };
-      }
-
-      if (result.visited.includes('start') && chosenNodeId !== 'start') {
-        player.coins += 5;
-      }
-
-      player.nodeId = finalNodeId;
-      const effect = this.resolveNode(player, finalNodeId);
-      return { success: true, path: result.visited, effect };
+    // If no moves left, resolve the space they landed on
+    if (this.movesRemaining <= 0) {
+      const effect = this.resolveNode(player, targetNodeId);
+      return {
+        success: true, nodeId: targetNodeId, movesRemaining: 0,
+        legalMoves: [], effect, landed: true,
+      };
     }
 
-    const effect = this.resolveNode(player, chosenNodeId);
-    return { success: true, effect };
+    // Still have moves — return next legal directions
+    const nextLegal = this.getReachableConnections(targetNodeId);
+    if (nextLegal.length === 0) {
+      // Dead end — force resolve
+      const effect = this.resolveNode(player, targetNodeId);
+      this.movesRemaining = 0;
+      return {
+        success: true, nodeId: targetNodeId, movesRemaining: 0,
+        legalMoves: [], effect, landed: true,
+      };
+    }
+
+    return {
+      success: true, nodeId: targetNodeId, movesRemaining: this.movesRemaining,
+      legalMoves: nextLegal, landed: false,
+    };
   }
 
   resolveNode(player, nodeId) {
@@ -466,10 +457,9 @@ class GameRoom {
         break;
       }
       case 'move_forward': {
-        // Move forward 'value' steps from current position
-        const result = this.walkPath(player.nodeId, event.value);
-        const final = result.visited[result.visited.length - 1] || player.nodeId;
-        if (!result.fork) { player.nodeId = final; player.spacesTraveled += event.value; }
+        const final = this.walkPath(player.nodeId, event.value);
+        player.nodeId = final;
+        player.spacesTraveled += event.value;
         break;
       }
     }
@@ -642,7 +632,10 @@ class GameRoom {
       pendingEvent: this.pendingEvent,
       pendingDuel: this.pendingDuel,
       pendingBoardEvent: this.pendingBoardEvent,
-      pendingForkOptions: this.pendingForkOptions,
+      movesRemaining: this.movesRemaining,
+      legalMoves: this.turnPhase === 'moving' ? this.getReachableConnections(
+        this.getCurrentPlayer()?.nodeId || 'start'
+      ) : [],
       activeMinigame: this.activeMinigame,
       minigameScores: this.minigameScores,
       boardNodes: this.getSerializedBoard(),
